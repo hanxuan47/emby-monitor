@@ -1,0 +1,1 @@
+"""Emby Monitor backend package."""
