@@ -14,7 +14,7 @@ export function TgBind() {
 
   const load = async () => {
     setLoading(true)
-    const r = await apiGet('/api/tg/binding-status')
+    const r = await apiGet('/api/tg/binding-status?token=' + (localStorage.getItem('ebt') || ''))
     if (r.ok) { setBound(r.bound); setBinding(r) }
     setLoading(false)
   }
@@ -30,7 +30,7 @@ export function TgBind() {
 
   async function genCode() {
     setCodeLoading(true)
-    const r = await apiPost('/api/tg/bind-code')
+    const r = await apiPost('/api/tg/bind-code', { token: localStorage.getItem('ebt') || '' })
     if (r.ok) {
       setCode(r.code)
       setCountdown(r.ttl_minutes * 60)
@@ -43,7 +43,7 @@ export function TgBind() {
 
   async function handleUnbind() {
     if (!confirm('确定解绑？')) return
-    const r = await apiPost('/api/tg/unbind')
+    const r = await apiPost('/api/tg/unbind', { token: localStorage.getItem('ebt') || '' })
     if (r.ok) {
       toast('已解绑')
       setBound(false)
@@ -136,7 +136,7 @@ export function TgBroadcast() {
     if (!confirm(`确定发送广播给所有已绑定的用户？\n\n${message.trim()}`)) return
     setSending(true)
     setResult(null)
-    const r = await apiPost('/api/tg/broadcast', { message: message.trim() })
+    const r = await apiPost('/api/tg/broadcast', { token: localStorage.getItem('ebt') || '', message: message.trim() })
     setResult(r)
     if (r.ok) {
       toast(`已发送给 ${r.sent}/${r.total} 个用户`, 'success')

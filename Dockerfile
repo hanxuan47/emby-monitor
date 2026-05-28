@@ -1,11 +1,9 @@
-FROM python:3.12-slim AS backend
+# ── Backend deps stage ───────────────────────────────────────────
+FROM python:3.12-slim AS deps
 
 WORKDIR /app
-
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-COPY backend/ /app/backend/
 
 # ── Frontend build stage ─────────────────────────────────────────
 FROM node:20-alpine AS frontend
@@ -22,7 +20,12 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY --from=backend /app/backend/ /app/backend/
+# Copy pip packages from deps stage
+COPY --from=deps /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=deps /usr/local/bin/ /usr/local/bin/
+
+# Copy application code
+COPY backend/ /app/backend/
 COPY --from=frontend /build/dist/ /app/frontend/dist/
 
 RUN mkdir -p /app/data
