@@ -426,9 +426,13 @@ async function sNc(){const r=await apiP('/api/notify/config',{smtp_host:document
 async function sTst(){const r=await apiP('/api/notify/send',{token,channel:document.getElementById('tstCh').value,title:document.getElementById('tstT').value||'测试',content:'Emby Monitor 测试通知',recipient:document.getElementById('tstRc').value});(r.ok&&r.status!=='failed')?st('已发送'):st(r.error||'发送失败','error')}
 
 // SETTINGS
-async function lSg(){document.getElementById('page-settings').innerHTML=`
+async function lSg(){
+  const mc=await apiG('/api/config/masked');
+  const host=mc.host||'';
+  const key=mc.api_key||'';
+  document.getElementById('page-settings').innerHTML=`
 <h1 class="text-xl font-bold tracking-tight mb-4">设置</h1>
-<div class="glass-card" style="max-width:480px"><div class="section-title">🔗 Emby 连接</div><div class="space-y-3"><input id="cfgN" class="glass-input" placeholder="名称" value="My Emby"><input id="cfgH" class="glass-input" placeholder="http://192.168.1.100:8096"><input id="cfgK" type="password" class="glass-input" placeholder="API Key"></div><button class="glass-btn glass-btn-primary w-full mt-4" onclick="cEmb()">连接</button></div>
+<div class="glass-card" style="max-width:480px"><div class="section-title">🔗 Emby 连接</div><div class="space-y-3"><input id="cfgN" class="glass-input" placeholder="名称" value="${mc.name||'My Emby'}"><input id="cfgH" class="glass-input" placeholder="http://192.168.1.100:8096" value="${host}"><input id="cfgK" type="password" class="glass-input" placeholder="API Key" value="${key}"><div style="font-size:.7rem;color:var(--text3);text-align:right">${mc.connected?'✅ 已连接 · 密钥已加密存储':'⏻ 待连接'}</div></div><button class="glass-btn glass-btn-primary w-full mt-4" onclick="cEmb()">保存连接</button></div>
 <div class="glass-card" style="max-width:480px"><div class="section-title">👤 资料</div><div class="space-y-3"><input id="pEU" class="glass-input" placeholder="Emby 用户名" value="${user.emby_username||''}"><input id="pEI" class="glass-input" placeholder="Emby User ID" value="${user.emby_user_id||''}"></div><button class="glass-btn glass-btn-primary w-full mt-4" onclick="uPf()">保存</button></div>`}
 async function cEmb(){const h=document.getElementById('cfgH').value.trim(),k=document.getElementById('cfgK').value.trim(),n=document.getElementById('cfgN').value.trim()||'My Emby';if(!h||!k)return st('请填写地址和Key','error');const r=await apiP('/api/config',{host:h,api_key:k,name:n});r.ok?(st('已连接 '+r.server_name),sc(true,r.server_name),lD()):st(r.error||'连接失败','error')}
 async function uPf(){const u=document.getElementById('pEU').value.trim(),i=document.getElementById('pEI').value.trim();const r=await apiP('/api/auth/update-profile',{token,emby_username:u,emby_user_id:i});if(r.ok){user.emby_username=u;user.emby_user_id=i;localStorage.setItem(UK,JSON.stringify(user));st('已保存')}else st(r.error||'失败','error')}

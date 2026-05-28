@@ -18,6 +18,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from crypto import decrypt as crypto_decrypt
+from crypto import encrypt as crypto_encrypt
+from crypto import hash_password, mask, verify_password
 from emby_client import EmbyClient
 from models import (
     CheckinRecord,
@@ -51,14 +54,6 @@ def set_emby(client: EmbyClient | None):
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
-
-
-def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
-
-
-def verify_password(password: str, hash_str: str) -> bool:
-    return hmac.compare_digest(hash_password(password), hash_str)
 
 
 def gen_token(user_id: int, role: str) -> str:
@@ -868,18 +863,28 @@ async def get_notify_config(db: AsyncSession = Depends(get_session)):
     result = await db.execute(
         select(PanelConfig).where(
             PanelConfig.key.in_([
-                "smtp_host", "smtp_port", "smtp_user", "smtp_from",
+                "smtp_host", "smtp_port", "smtp_user", "smtp_pass", "smtp_from",
                 "tg_bot_token", "tg_chat_id",
             ])
         )
     )
     configs = {r.key: r.value for r in result.scalars().all()}
+
+    # Decrypt sensitive fields
+    raw_smtp = configs.get("smtp_pass", "")
+    decrypted_smtp = crypto_decrypt(raw_smtp)
+    smtp_pass = decrypted_smtp if decrypted_smtp else raw_smtp
+    raw_tg = configs.get("tg_bot_token", "")
+    decrypted_tg = crypto_decrypt(raw_tg)
+    tg_token = decrypted_tg if decrypted_tg else raw_tg
+
     return {
         "smtp_host": configs.get("smtp_host", ""),
         "smtp_port": configs.get("smtp_port", "587"),
         "smtp_user": configs.get("smtp_user", ""),
+        "smtp_pass": smtp_pass,
         "smtp_from": configs.get("smtp_from", ""),
-        "tg_bot_token": configs.get("tg_bot_token", ""),
+        "tg_bot_token": tg_token,
         "tg_chat_id": configs.get("tg_chat_id", ""),
     }
 
@@ -900,9 +905,9 @@ async def save_notify_config(
         "smtp_host": smtp_host,
         "smtp_port": smtp_port,
         "smtp_user": smtp_user,
-        "smtp_pass": smtp_pass,
+        "smtp_pass": crypto_encrypt(smtp_pass) if smtp_pass else smtp_pass,
         "smtp_from": smtp_from,
-        "tg_bot_token": tg_bot_token,
+        "tg_bot_token": crypto_encrypt(tg_bot_token) if tg_bot_token else tg_bot_token,
         "tg_chat_id": tg_chat_id,
     }
     for k, v in pairs.items():

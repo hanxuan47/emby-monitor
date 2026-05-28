@@ -17,6 +17,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from crypto import decrypt as crypto_decrypt
+from crypto import encrypt as crypto_encrypt
 from emby_client import EmbyClient
 from feature_routes import router as feature_router
 from feature_routes import set_emby as set_features_emby
@@ -56,7 +58,11 @@ async def lifespan(app: FastAPI):
     async for session in get_session():
         cfg = (await session.execute(select(ServerConfig))).scalar_one_or_none()
         if cfg:
-            emby = EmbyClient(host=cfg.host, api_key=cfg.api_key)
+            # Decrypt the stored API key (handle legacy plaintext too)
+            raw_key = cfg.api_key
+            decrypted = crypto_decrypt(raw_key)
+            api_key = decrypted if decrypted else raw_key
+            emby = EmbyClient(host=cfg.host, api_key=api_key)
             set_features_emby(emby)
             ok = await emby.health()
             if ok:
@@ -117,10 +123,11 @@ async def set_config(
     emby = client
     set_features_emby(emby)
 
-    # Save config
+    # Save config with encrypted API key
+    encrypted_key = crypto_encrypt(api_key)
     async with db_session.begin():
         await db_session.execute(text("DELETE FROM server_config"))
-        cfg = ServerConfig(name=name, host=host, api_key=api_key, version=info.get("Version", ""))
+        cfg = ServerConfig(name=name, host=host, api_key=encrypted_key, version=info.get("Version", ""))
         db_session.add(cfg)
 
     logger.info(f"Connected to {name} ({info.get('Version','')})")
@@ -137,6 +144,23 @@ async def config_status():
     if emby and await emby.health():
         return {"connected": True, "name": emby.server_name, "version": emby.server_version}
     return {"connected": False}
+
+
+@app.get("/api/config/masked")
+async def config_masked(db_session: AsyncSession = Depends(get_session)):
+    """Return config with masked secrets for frontend display."""
+    from crypto import mask as crypto_mask
+    if not emby:
+        return {"connected": False}
+    result = await db_session.execute(select(ServerConfig))
+    cfg = result.scalar_one_or_none()
+    return {
+        "connected": True,
+        "name": cfg.name if cfg else "",
+        "host": cfg.host if cfg else "",
+        "api_key": crypto_mask(cfg.api_key) if cfg else "",
+        "version": emby.server_version,
+    }
 
 
 # ── Dashboard data endpoints ────────────────────────────────────────
