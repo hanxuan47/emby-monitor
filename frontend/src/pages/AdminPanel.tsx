@@ -20,20 +20,121 @@ export function Dashboard({ user }: { user: any }) {
   if (data.error) return <div className="text-center py-20 text-[rgba(255,255,255,0.5)]"><p>请先在设置中配置 Emby 连接</p><button className="glass-btn glass-btn-primary mt-4" onClick={() => window.location.href='/admin'}>去设置</button></div>
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold tracking-tight mb-5">仪表盘</h1>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {[
-          [data.active_streams || 0, '活跃流'],
-          [data.online_users || 0, '在线用户'],
-          [(data.total_items || 0).toLocaleString(), '媒体总数'],
-          [data.today_plays || 0, '今日播放'],
-        ].map(([v, label]) => (
-          <div key={label} className="stat-card">
-            <div className="stat-value">{v}</div>
-            <div className="stat-label">{label}</div>
+    <div className="space-y-5">
+      {/* ── 欢迎横幅 ── */}
+      <div className="glass-ios p-5 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.07] to-purple-500/[0.04]" />
+        <div className="relative">
+          <div className="text-xs text-[rgba(255,255,255,0.3)] font-medium tracking-wider uppercase mb-1">Overview</div>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {user?.username ? `${user.username}，晚上好` : '仪表盘'}
+          </h1>
+          <p className="text-sm text-[rgba(255,255,255,0.35)] mt-1">
+            当前有 <span className="text-white/60 font-semibold">{data.active_streams}</span> 个活跃流，<span className="text-white/60 font-semibold">{data.online_users}</span> 人在线
+          </p>
+        </div>
+      </div>
+
+      {/* ── 核心指标卡片 ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard
+          icon="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          label="活跃流"
+          value={data.active_streams}
+          sub={`直连 ${data.direct_play} / 转码 ${data.transcoding_now}`}
+        />
+        <StatCard
+          icon="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"
+          label="在线用户"
+          value={data.online_users}
+          sub={`共 ${data.total_users} 用户`}
+        />
+        <StatCard
+          icon="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+          label="媒体总数"
+          value={(data.total_items || 0).toLocaleString()}
+          sub={data.total_size_gb ? `${data.total_size_gb} GB` : ''}
+        />
+        <StatCard
+          icon="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+          label="今日播放"
+          value={data.today_plays}
+          sub="今日累计"
+        />
+      </div>
+
+      {/* ── 播放详情 ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <GlassCard title="播放方式">
+          <div className="space-y-3">
+            <BarRow label="直连" value={data.direct_play} total={data.active_streams || 1} color="rgba(59,130,246,0.6)" />
+            <BarRow label="转码" value={data.transcoding_now} total={data.active_streams || 1} color="rgba(168,85,247,0.6)" />
           </div>
-        ))}
+        </GlassCard>
+
+        <GlassCard title="今日概览">
+          <div className="grid grid-cols-2 gap-3">
+            <IconStat icon="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" label="总带宽" value={data.total_bitrate_kbps ? `${data.total_bitrate_kbps} Kbps` : '0'} />
+            <IconStat icon="M3 5h18v14H3V5zm4 2v10M15 7v10" label="总媒体" value={String(data.total_items || 0)} />
+          </div>
+        </GlassCard>
+      </div>
+    </div>
+  )
+}
+
+// ─── iOS 风格子组件 ────────────────────────────────────────────
+
+function GlassCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="glass-ios p-4">
+      <div className="text-[.65rem] font-semibold text-[rgba(255,255,255,0.3)] uppercase tracking-wider mb-3">{title}</div>
+      {children}
+    </div>
+  )
+}
+
+function StatCard({ icon, label, value, sub }: { icon: string; label: string; value: any; sub?: string }) {
+  return (
+    <div className="glass-ios p-4 flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-lg bg-[rgba(59,130,246,0.1)] flex items-center justify-center">
+          <svg className="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d={icon} strokeLinecap="round" />
+          </svg>
+        </div>
+        <span className="text-[.65rem] text-[rgba(255,255,255,0.3)] font-medium">{label}</span>
+      </div>
+      <div className="text-2xl font-bold tracking-tight">{value}</div>
+      {sub && <div className="text-[.6rem] text-[rgba(255,255,255,0.2)]">{sub}</div>}
+    </div>
+  )
+}
+
+function IconStat({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2.5 p-2 rounded-xl bg-[rgba(255,255,255,0.03)]">
+      <svg className="w-4 h-4 shrink-0 text-[rgba(255,255,255,0.25)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+        <path d={icon} strokeLinecap="round" />
+      </svg>
+      <div className="min-w-0">
+        <div className="text-xs font-semibold text-white/70">{value}</div>
+        <div className="text-[.6rem] text-[rgba(255,255,255,0.2)]">{label}</div>
+      </div>
+    </div>
+  )
+}
+
+function BarRow({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0
+  return (
+    <div>
+      <div className="flex items-center justify-between text-xs mb-1.5">
+        <span className="text-[rgba(255,255,255,0.4)]">{label}</span>
+        <span className="text-white/60 font-semibold">{value} <span className="text-[rgba(255,255,255,0.2)] font-normal">({pct}%)</span></span>
+      </div>
+      <div className="h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
+        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: color }} />
       </div>
     </div>
   )

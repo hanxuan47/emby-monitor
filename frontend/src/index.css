@@ -72,6 +72,15 @@ body {
   .stat-card:hover { border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }
   .stat-value { @apply text-[1.75rem] font-bold tracking-tight leading-tight; }
   .stat-label { @apply text-[.75rem] text-[rgba(255,255,255,0.5)] mt-[.15rem] font-medium; }
+  .glass-ios {
+    background: rgba(18,21,31,0.6);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 18px;
+    transition: all 0.2s ease;
+  }
+  .glass-ios:hover { background: rgba(18,21,31,0.7); }
   .sidebar-link {
     @apply flex items-center gap-3 px-3 py-[.55rem] mx-1 rounded-xl cursor-pointer transition-all text-[rgba(255,255,255,0.5)] text-sm font-medium;
   }
