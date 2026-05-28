@@ -26,6 +26,7 @@ from .models import (
     ActivationCode,
     AiInsight,
     AiWhitelist,
+    Announcement,
     CheckinRecord,
     LoginCode,
     MediaRequest,
@@ -40,6 +41,7 @@ from .models import (
     SupportTicket,
     TicketMessage,
     UserBinding,
+    WikiPage,
     async_engine,
     get_session,
     init_db,
@@ -655,6 +657,7 @@ async def list_sites(db: AsyncSession = Depends(get_session)):
                 "name": r.name,
                 "url": r.url,
                 "route_type": r.route_type,
+                "tags": r.tags,
                 "status": r.status,
                 "latency_ms": r.latency_ms,
                 "note": r.note,
@@ -752,6 +755,274 @@ async def test_all_sites(db: AsyncSession = Depends(get_session)):
         for s in sites
     ]
     return {"ok": True, "results": results}
+
+
+# ════════════════════════════════════════════════════════════════════
+# SITES — Update (with tags)
+# ════════════════════════════════════════════════════════════════════
+
+
+@router.post("/api/sites/update/{site_id}")
+async def update_site(
+    site_id: int,
+    name: str = Query(...),
+    url: str = Query(...),
+    route_type: str = Query("emby"),
+    tags: str = Query(""),
+    note: str = Query(""),
+    sort_order: int = Query(0),
+    is_active: bool = Query(True),
+    db: AsyncSession = Depends(get_session),
+):
+    """Update a site route (name, url, tags, etc.)."""
+    result = await db.execute(select(SiteRoute).where(SiteRoute.id == site_id))
+    site = result.scalar_one_or_none()
+    if not site:
+        return {"error": "Site not found"}
+    site.name = name
+    site.url = url
+    site.route_type = route_type
+    site.tags = tags
+    site.note = note
+    site.sort_order = sort_order
+    site.is_active = 1 if is_active else 0
+    await db.commit()
+    return {"ok": True}
+
+
+# ════════════════════════════════════════════════════════════════════
+# ANNOUNCEMENTS — Public & Admin
+# ════════════════════════════════════════════════════════════════════
+
+
+@router.get("/api/announcements")
+async def list_published_announcements(db: AsyncSession = Depends(get_session)):
+    """Public: list only published announcements."""
+    result = await db.execute(
+        select(Announcement)
+        .where(Announcement.is_published == 1)
+        .order_by(Announcement.published_at.desc())
+    )
+    return {
+        "announcements": [
+            {
+                "id": a.id,
+                "title": a.title,
+                "content": a.content,
+                "published_at": a.published_at.isoformat() if a.published_at else None,
+                "created_at": a.created_at.isoformat(),
+            }
+            for a in result.scalars().all()
+        ]
+    }
+
+
+@router.get("/api/announcements/all")
+async def list_all_announcements(db: AsyncSession = Depends(get_session)):
+    """Admin: list all announcements including drafts."""
+    result = await db.execute(
+        select(Announcement).order_by(Announcement.created_at.desc())
+    )
+    return {
+        "announcements": [
+            {
+                "id": a.id,
+                "title": a.title,
+                "content": a.content,
+                "is_published": bool(a.is_published),
+                "published_at": a.published_at.isoformat() if a.published_at else None,
+                "created_at": a.created_at.isoformat(),
+                "updated_at": a.updated_at.isoformat(),
+            }
+            for a in result.scalars().all()
+        ]
+    }
+
+
+@router.post("/api/announcements/create")
+async def create_announcement(
+    title: str = Query(...),
+    content: str = Query(""),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: create a new announcement (draft by default)."""
+    ann = Announcement(title=title, content=content)
+    db.add(ann)
+    await db.commit()
+    await db.refresh(ann)
+    return {"ok": True, "id": ann.id}
+
+
+@router.post("/api/announcements/{ann_id}")
+async def update_announcement(
+    ann_id: int,
+    title: str = Query(...),
+    content: str = Query(""),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: update an announcement."""
+    result = await db.execute(select(Announcement).where(Announcement.id == ann_id))
+    ann = result.scalar_one_or_none()
+    if not ann:
+        return {"error": "Announcement not found"}
+    ann.title = title
+    ann.content = content
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/api/announcements/{ann_id}/toggle")
+async def toggle_announcement(
+    ann_id: int,
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: publish or unpublish an announcement."""
+    result = await db.execute(select(Announcement).where(Announcement.id == ann_id))
+    ann = result.scalar_one_or_none()
+    if not ann:
+        return {"error": "Announcement not found"}
+    ann.is_published = 0 if ann.is_published else 1
+    if ann.is_published:
+        ann.published_at = datetime.utcnow()
+    await db.commit()
+    return {"ok": True, "is_published": bool(ann.is_published)}
+
+
+@router.delete("/api/announcements/{ann_id}")
+async def delete_announcement(
+    ann_id: int,
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: delete an announcement."""
+    result = await db.execute(select(Announcement).where(Announcement.id == ann_id))
+    ann = result.scalar_one_or_none()
+    if ann:
+        await db.delete(ann)
+        await db.commit()
+    return {"ok": True}
+
+
+# ════════════════════════════════════════════════════════════════════
+# WIKI — Public & Admin
+# ════════════════════════════════════════════════════════════════════
+
+
+@router.get("/api/wiki")
+async def list_wiki_pages(db: AsyncSession = Depends(get_session)):
+    """Public: list published wiki pages."""
+    result = await db.execute(
+        select(WikiPage)
+        .where(WikiPage.is_published == 1)
+        .order_by(WikiPage.title)
+    )
+    return {
+        "pages": [
+            {
+                "id": p.id,
+                "slug": p.slug,
+                "title": p.title,
+                "updated_at": p.updated_at.isoformat(),
+            }
+            for p in result.scalars().all()
+        ]
+    }
+
+
+@router.get("/api/wiki/all")
+async def list_all_wiki_pages(db: AsyncSession = Depends(get_session)):
+    """Admin: list all wiki pages including drafts."""
+    result = await db.execute(
+        select(WikiPage).order_by(WikiPage.title)
+    )
+    return {
+        "pages": [
+            {
+                "id": p.id,
+                "slug": p.slug,
+                "title": p.title,
+                "content": p.content,
+                "is_published": bool(p.is_published),
+                "updated_at": p.updated_at.isoformat(),
+            }
+            for p in result.scalars().all()
+        ]
+    }
+
+
+@router.get("/api/wiki/{slug}")
+async def get_wiki_page(slug: str, db: AsyncSession = Depends(get_session)):
+    """Public: get a single wiki page by slug."""
+    result = await db.execute(
+        select(WikiPage).where(
+            WikiPage.slug == slug,
+            WikiPage.is_published == 1,
+        )
+    )
+    page = result.scalar_one_or_none()
+    if not page:
+        return {"error": "Page not found"}
+    return {
+        "id": page.id,
+        "slug": page.slug,
+        "title": page.title,
+        "content": page.content,
+        "updated_at": page.updated_at.isoformat(),
+    }
+
+
+@router.post("/api/wiki/create")
+async def create_wiki_page(
+    slug: str = Query(...),
+    title: str = Query(...),
+    content: str = Query(""),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: create a new wiki page."""
+    import re
+    if not re.match(r"^[a-z0-9_-]+$", slug):
+        return {"error": "Slug must be lowercase letters, numbers, hyphens, underscores only"}
+    existing = await db.execute(select(WikiPage).where(WikiPage.slug == slug))
+    if existing.scalar_one_or_none():
+        return {"error": f"Slug '{slug}' already exists"}
+    page = WikiPage(slug=slug, title=title, content=content, is_published=1)
+    db.add(page)
+    await db.commit()
+    await db.refresh(page)
+    return {"ok": True, "id": page.id}
+
+
+@router.post("/api/wiki/{page_id}")
+async def update_wiki_page(
+    page_id: int,
+    title: str = Query(...),
+    content: str = Query(""),
+    is_published: bool = Query(True),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: update a wiki page."""
+    result = await db.execute(select(WikiPage).where(WikiPage.id == page_id))
+    page = result.scalar_one_or_none()
+    if not page:
+        return {"error": "Page not found"}
+    page.title = title
+    page.content = content
+    page.is_published = 1 if is_published else 0
+    await db.commit()
+    return {"ok": True}
+
+
+@router.delete("/api/wiki/{page_id}")
+async def delete_wiki_page(
+    page_id: int,
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: delete a wiki page."""
+    result = await db.execute(select(WikiPage).where(WikiPage.id == page_id))
+    page = result.scalar_one_or_none()
+    if page:
+        await db.delete(page)
+        await db.commit()
+    return {"ok": True}
 
 
 # ════════════════════════════════════════════════════════════════════

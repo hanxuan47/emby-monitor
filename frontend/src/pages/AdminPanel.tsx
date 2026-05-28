@@ -11,6 +11,9 @@ import { TgBroadcast } from './TgBind'
 import { MyRequests, AdminRequests } from './Requests'
 import { UserMap } from './UserMap'
 import { EmbyUserManage } from './EmbyUserManage'
+import AdminSites from './AdminSites'
+import AdminAnnouncements from './AdminAnnouncements'
+import AdminWiki from './AdminWiki'
 
 // ─── Page Components ─────────────────────────────────────────
 
@@ -305,7 +308,9 @@ export default function AdminPanel() {
     'media-reviews': <Placeholder name="评价" />,
     users: <Placeholder name="用户活动" />,
     'users-mgmt': <EmbyUserManage />,
-    sites: <Placeholder name="站点" />,
+    sites: <AdminSites />,
+    'announcements-admin': <AdminAnnouncements />,
+    'wiki-admin': <AdminWiki />,
     library: <Placeholder name="媒体库" />,
     codec: <Placeholder name="编码分析" />,
     tickets: <Placeholder name="工单" />,

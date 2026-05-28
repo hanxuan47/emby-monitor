@@ -204,6 +204,7 @@ class SiteRoute(Base):
     name = Column(String(128), nullable=False)
     url = Column(String(512), nullable=False)
     route_type = Column(String(32), default="emby")  # emby, jellyfin, proxy, etc.
+    tags = Column(Text, default="")                   # comma-separated tags: 优化,直连,国内
     status = Column(String(16), default="unknown")   # online, offline, unknown
     latency_ms = Column(Integer, default=0)
     api_key = Column(String(128), default="")
@@ -340,7 +341,41 @@ class ActivationCode(Base):
 
 
 # ════════════════════════════════════════════════════════════════════
-# 15. AI Insights (智能分析报告)
+# 15. Announcements (公告系统)
+# ════════════════════════════════════════════════════════════════════
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    title = Column(String(256), nullable=False)
+    content = Column(Text, default="")
+    is_published = Column(Integer, default=0)
+    created_by = Column(Integer, nullable=True)  # PanelUser.id
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    published_at = Column(DateTime, nullable=True)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 16. Wiki Pages (Wiki 知识库)
+# ════════════════════════════════════════════════════════════════════
+
+
+class WikiPage(Base):
+    __tablename__ = "wiki_pages"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    slug = Column(String(128), unique=True, nullable=False, index=True)
+    title = Column(String(256), nullable=False)
+    content = Column(Text, default="")
+    is_published = Column(Integer, default=0)
+    created_by = Column(Integer, nullable=True)  # PanelUser.id
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 17. AI Insights (智能分析报告)
 # ════════════════════════════════════════════════════════════════════
 
 

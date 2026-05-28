@@ -6,6 +6,9 @@ import MediaDiscovery from './MediaDiscovery'
 import { MyRequests } from './Requests'
 import { TgBind } from './TgBind'
 import { AiUserReport } from './AiPanel'
+import { ServerRoutes } from './ServerRoutes'
+import { Announcements } from './Announcements'
+import { WikiViewer } from './WikiViewer'
 import { Spinner } from './Setup'
 
 export default function UserPanel() {
@@ -25,6 +28,9 @@ export default function UserPanel() {
           {page === 'my-requests' && <MyRequests />}
           {page === 'tg' && <TgBind />}
           {page === 'ai' && <AiUserReport />}
+          {page === 'sites' && <ServerRoutes />}
+          {page === 'announcements' && <Announcements />}
+          {page === 'wiki' && <WikiViewer />}
           {page === 'dashboard' && <Dashboard user={user} />}
           {page === 'checkin' && <Checkin user={user} />}
           {page === 'settings' && <Settings user={user} isAdmin={false} />}
