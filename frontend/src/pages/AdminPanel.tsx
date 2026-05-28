@@ -6,6 +6,7 @@ import { Spinner } from './Setup'
 import { Sidebar, TabBar } from '../components/Layout'
 import MediaDiscovery from './MediaDiscovery'
 import CardManage from './CardManage'
+import { AiAdminPanel } from './AiPanel'
 import { TgBroadcast } from './TgBind'
 import { MyRequests, AdminRequests } from './Requests'
 
@@ -307,6 +308,7 @@ export default function AdminPanel() {
     codec: <Placeholder name="编码分析" />,
     tickets: <Placeholder name="工单" />,
     'admin-requests': <AdminRequests />,
+    'ai-admin': <AiAdminPanel />,
     broadcast: <TgBroadcast />,
     notifications: <Placeholder name="通知" />,
     settings: <Settings user={user} isAdmin={true} />,

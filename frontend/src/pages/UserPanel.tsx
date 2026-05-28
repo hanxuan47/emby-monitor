@@ -5,6 +5,7 @@ import { Dashboard, Checkin, Settings, Placeholder } from './AdminPanel'
 import MediaDiscovery from './MediaDiscovery'
 import { MyRequests } from './Requests'
 import { TgBind } from './TgBind'
+import { AiUserReport } from './AiPanel'
 import { Spinner } from './Setup'
 
 export default function UserPanel() {
@@ -23,6 +24,7 @@ export default function UserPanel() {
           {page === 'discovery' && <MediaDiscovery />}
           {page === 'my-requests' && <MyRequests />}
           {page === 'tg' && <TgBind />}
+          {page === 'ai' && <AiUserReport />}
           {page === 'dashboard' && <Dashboard user={user} />}
           {page === 'checkin' && <Checkin user={user} />}
           {page === 'settings' && <Settings user={user} isAdmin={false} />}

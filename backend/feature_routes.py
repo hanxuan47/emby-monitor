@@ -24,6 +24,7 @@ from .emby_crypto import hash_password, mask, verify_password
 from .emby_client import EmbyClient
 from .models import (
     ActivationCode,
+    AiInsight,
     CheckinRecord,
     LoginCode,
     MediaRequest,
@@ -1773,4 +1774,136 @@ async def tg_broadcast(
             success_count += 1
 
     return {"ok": True, "sent": success_count, "total": len(bindings)}
+
+
+# ════════════════════════════════════════════════════════════════════
+# AI 智能管控 API
+# ════════════════════════════════════════════════════════════════════
+
+
+@router.post("/api/ai/scan")
+async def ai_scan(
+    token: str = Query(...),
+    user_id: int = Query(default=0),
+    db: AsyncSession = Depends(get_session),
+):
+    """Run AI analysis. If user_id provided, analyze single user; otherwise all."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    admin = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not admin or admin.role != "admin":
+        return {"error": "无权操作"}
+
+    from .ai_engine import analyze_single_user, run_analysis
+
+    if user_id:
+        user = (await db.execute(select(PanelUser).where(PanelUser.id == user_id))).scalar_one_or_none()
+        if not user:
+            return {"error": "用户不存在"}
+        insights = await analyze_single_user(db, user)
+        return {"ok": True, "user_id": user_id, "insights": len(insights)}
+    else:
+        # Import emby from main module
+        from .main import emby
+        result = await run_analysis(db, emby)
+        return result
+
+
+@router.get("/api/ai/config")
+async def ai_get_config(
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Get AI analysis config."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    admin = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not admin or admin.role != "admin":
+        return {"error": "无权操作"}
+
+    from .ai_engine import _load_config
+    return {"ok": True, "config": await _load_config(db)}
+
+
+@router.post("/api/ai/config")
+async def ai_save_config(
+    token: str = Query(...),
+    enabled: str = Query("1"),
+    inactive_days: int = Query(14),
+    auto_disable_days: int = Query(30),
+    anomaly_threshold: int = Query(5),
+    db: AsyncSession = Depends(get_session),
+):
+    """Save AI analysis config."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    admin = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not admin or admin.role != "admin":
+        return {"error": "无权操作"}
+
+    pairs = {
+        "ai_enabled": enabled,
+        "ai_inactive_days": str(inactive_days),
+        "ai_auto_disable_days": str(auto_disable_days),
+        "ai_anomaly_threshold": str(anomaly_threshold),
+    }
+    for k, v in pairs.items():
+        result = await db.execute(select(PanelConfig).where(PanelConfig.key == k))
+        cfg = result.scalar_one_or_none()
+        if cfg:
+            cfg.value = v
+        else:
+            db.add(PanelConfig(key=k, value=v))
+    await db.commit()
+    return {"ok": True}
+
+
+@router.get("/api/ai/insights")
+async def ai_get_insights(
+    token: str = Query(...),
+    user_id: int = Query(default=0),
+    category: str = Query(default=""),
+    db: AsyncSession = Depends(get_session),
+):
+    """Get AI insights. Admin sees all; user sees own."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    viewer = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not viewer:
+        return {"error": "用户不存在"}
+
+    query = select(AiInsight).order_by(AiInsight.created_at.desc())
+
+    if viewer.role != "admin":
+        query = query.where(AiInsight.panel_user_id == viewer.id)
+    elif user_id:
+        query = query.where(AiInsight.panel_user_id == user_id)
+
+    if category:
+        query = query.where(AiInsight.category == category)
+
+    result = await db.execute(query.limit(100))
+    items = []
+    for ins in result.scalars().all():
+        username = ""
+        if ins.panel_user_id:
+            u = (await db.execute(select(PanelUser.username).where(PanelUser.id == ins.panel_user_id))).scalar_one_or_none()
+            username = u or "(已删除)"
+        items.append({
+            "id": ins.id,
+            "panel_user_id": ins.panel_user_id,
+            "username": username,
+            "category": ins.category,
+            "title": ins.title,
+            "content": ins.content,
+            "severity": ins.severity,
+            "auto_action": ins.auto_action,
+            "created_at": ins.created_at.isoformat(),
+        })
+    return {"ok": True, "items": items, "total": len(items)}
+
 

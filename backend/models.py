@@ -335,6 +335,23 @@ class ActivationCode(Base):
 
 
 # ════════════════════════════════════════════════════════════════════
+# 15. AI Insights (智能分析报告)
+# ════════════════════════════════════════════════════════════════════
+
+
+class AiInsight(Base):
+    __tablename__ = "ai_insights"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    panel_user_id = Column(Integer, nullable=False, index=True)
+    category = Column(String(32), nullable=False, index=True)  # activity, watch, anomaly, recommendation
+    title = Column(String(256), nullable=False)
+    content = Column(Text, default="")
+    severity = Column(String(16), default="info")  # info, warning, danger
+    auto_action = Column(String(64), default="")   # suggest disable, etc.
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ════════════════════════════════════════════════════════════════════
 # Engine & helpers
 # ════════════════════════════════════════════════════════════════════
 
