@@ -11,6 +11,7 @@ export default function UserAuth() {
   const [regUser, setRegUser] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPass, setRegPass] = useState('')
+  const [cardKey, setCardKey] = useState('')
   const [tab, setTab] = useState<'login' | 'register'>('login')
   const [regEnabled, setRegEnabled] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -36,7 +37,13 @@ export default function UserAuth() {
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
     if (!regUser || !regEmail || !regPass) { toast('请填写完整', 'error'); return }
-    const r = await apiPost('/api/auth/register', { username: regUser, email: regEmail, password: regPass })
+    if (!cardKey) { toast('请填写卡密', 'error'); return }
+    const r = await apiPost('/api/auth/register', {
+      username: regUser,
+      email: regEmail,
+      password: regPass,
+      card_key: cardKey,
+    })
     if (r.ok) {
       toast('注册成功，请登录', 'success')
       setTab('login')
@@ -65,7 +72,11 @@ export default function UserAuth() {
           <input className="glass-input" placeholder="用户名" value={regUser} onChange={e => setRegUser(e.target.value)} />
           <input className="glass-input" type="email" placeholder="邮箱" value={regEmail} onChange={e => setRegEmail(e.target.value)} />
           <input className="glass-input" type="password" placeholder="密码" value={regPass} onChange={e => setRegPass(e.target.value)} />
+          <input className="glass-input" placeholder="卡密（如 EMBY-XXXX-XXXX-XXXX）" value={cardKey} onChange={e => setCardKey(e.target.value.toUpperCase())} />
           <button type="submit" className="glass-btn glass-btn-primary w-full py-3">注册</button>
+          <p className="text-xs text-center text-[rgba(255,255,255,0.3)]">
+            注册需要有效的卡密
+          </p>
           <p className="text-xs text-center text-[rgba(255,255,255,0.5)]">
             <button type="button" onClick={() => setTab('login')} className="hover:text-white transition-colors">已有账号？登录</button>
           </p>

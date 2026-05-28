@@ -23,6 +23,7 @@ from .emby_crypto import encrypt as crypto_encrypt
 from .emby_crypto import hash_password, mask, verify_password
 from .emby_client import EmbyClient
 from .models import (
+    ActivationCode,
     CheckinRecord,
     LoginCode,
     MediaRequest,
@@ -127,13 +128,14 @@ async def register(
     username: str = Query(...),
     email: str = Query(...),
     password: str = Query(...),
+    card_key: str = Query(default=""),
     db: AsyncSession = Depends(get_session),
 ):
-    """Register a new panel user. First user auto-becomes admin."""
+    """Register a new panel user. First user auto-becomes admin.
+    After admin exists, users must provide a valid card key."""
     if len(password) < 4:
         return {"error": "密码至少4位"}
 
-    # After first admin is created, check registration toggle
     admin_exists = await db.execute(
         select(PanelUser).where(PanelUser.role == "admin").limit(1)
     )
@@ -146,6 +148,21 @@ async def register(
         cfg = cfg_result.scalar_one_or_none()
         if cfg and cfg.value == "0":
             return {"error": "注册已关闭"}
+
+        # ── Require card key ──────────────────────────────────────
+        if not card_key:
+            return {"error": "注册需要卡密"}
+        result = await db.execute(
+            select(ActivationCode).where(
+                ActivationCode.code == card_key.upper().strip(),
+                ActivationCode.is_used == 0,
+            )
+        )
+        ac = result.scalar_one_or_none()
+        if not ac:
+            return {"error": "卡密无效或已被使用"}
+        if ac.expires_at and ac.expires_at < datetime.utcnow():
+            return {"error": "卡密已过期"}
 
     existing = await db.execute(
         select(PanelUser).where(
@@ -168,6 +185,15 @@ async def register(
         role="admin" if is_first else "user",
     )
     db.add(user)
+    await db.flush()
+
+    # ── Mark card key as used ─────────────────────────────────────
+    if has_admin and ac:
+        ac.is_used = 1
+        ac.used_by = user.id
+        ac.used_at = datetime.utcnow()
+        user.points = (user.points or 0) + (ac.points or 0)
+
     await db.commit()
     await db.refresh(user)
 
@@ -1459,3 +1485,129 @@ async def mark_downloaded(
     await db.commit()
 
     return {"ok": True, "status": "downloaded"}
+
+
+# ════════════════════════════════════════════════════════════════════
+# 卡密系统 API
+# ════════════════════════════════════════════════════════════════════
+
+
+def generate_card_code() -> str:
+    """Generate a card key like EMBY-XXXX-XXXX-XXXX"""
+    def _block() -> str:
+        return ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    return f"EMBY-{_block()}-{_block()}-{_block()}"
+
+
+@router.post("/api/admin/cards/create")
+async def create_cards(
+    token: str = Query(...),
+    count: int = Query(default=1, ge=1, le=100),
+    points: int = Query(default=0, ge=0),
+    expire_days: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: create batch of card keys."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    admin = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not admin or admin.role != "admin":
+        return {"error": "无权操作"}
+
+    expires_at = (datetime.utcnow() + timedelta(days=expire_days)) if expire_days > 0 else None
+    created = []
+    for _ in range(count):
+        code = generate_card_code()
+        # ensure uniqueness
+        while (await db.execute(select(ActivationCode).where(ActivationCode.code == code))).scalar_one_or_none():
+            code = generate_card_code()
+        ac = ActivationCode(code=code, points=points, expires_at=expires_at, created_by=admin.id)
+        db.add(ac)
+        created.append(code)
+    await db.commit()
+
+    return {"ok": True, "count": len(created), "codes": created, "points": points}
+
+
+@router.get("/api/admin/cards/list")
+async def list_cards(
+    token: str = Query(...),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: list all card keys with pagination."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    admin = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not admin or admin.role != "admin":
+        return {"error": "无权操作"}
+
+    total = (await db.execute(select(func.count(ActivationCode.id)))).scalar()
+    offset = (page - 1) * page_size
+    results = await db.execute(
+        select(ActivationCode).order_by(ActivationCode.created_at.desc()).offset(offset).limit(page_size)
+    )
+    cards = results.scalars().all()
+    items = []
+    for c in cards:
+        used_by_name = ""
+        if c.used_by:
+            u = (await db.execute(select(PanelUser).where(PanelUser.id == c.used_by))).scalar_one_or_none()
+            used_by_name = u.username if u else "(已删除)"
+        items.append({
+            "id": c.id,
+            "code": c.code,
+            "points": c.points,
+            "is_used": c.is_used,
+            "used_by_name": used_by_name,
+            "used_at": c.used_at.isoformat() if c.used_at else None,
+            "expires_at": c.expires_at.isoformat() if c.expires_at else None,
+            "created_at": c.created_at.isoformat(),
+        })
+
+    return {"ok": True, "items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.post("/api/admin/cards/delete")
+async def delete_cards(
+    token: str = Query(...),
+    ids: str = Query(...),  # comma-separated card IDs
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: delete/invalidate card keys."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    admin = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not admin or admin.role != "admin":
+        return {"error": "无权操作"}
+
+    id_list = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()]
+    for cid in id_list:
+        ac = (await db.execute(select(ActivationCode).where(ActivationCode.id == cid))).scalar_one_or_none()
+        if ac and ac.is_used == 0:
+            await db.delete(ac)
+    await db.commit()
+    return {"ok": True, "deleted": len(id_list)}
+
+
+@router.post("/api/card/validate")
+async def validate_card(
+    card_key: str = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Public: check if a card key is valid (without using it)."""
+    ac = (await db.execute(
+        select(ActivationCode).where(
+            ActivationCode.code == card_key.upper().strip(),
+            ActivationCode.is_used == 0,
+        )
+    )).scalar_one_or_none()
+    if not ac:
+        return {"ok": False, "error": "卡密无效或已被使用"}
+    if ac.expires_at and ac.expires_at < datetime.utcnow():
+        return {"ok": False, "error": "卡密已过期"}
+    return {"ok": True, "points": ac.points}

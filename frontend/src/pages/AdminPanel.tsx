@@ -5,6 +5,7 @@ import { useToast } from '../components/Toast'
 import { Spinner } from './Setup'
 import { Sidebar, TabBar } from '../components/Layout'
 import MediaDiscovery from './MediaDiscovery'
+import CardManage from './CardManage'
 import { MyRequests, AdminRequests } from './Requests'
 
 // ─── Page Components ─────────────────────────────────────────
@@ -189,6 +190,7 @@ export default function AdminPanel() {
 
   const pages: Record<string, React.ReactNode> = {
     dashboard: <Dashboard user={user} />,
+    cards: <CardManage />,
     'discovery': <MediaDiscovery />,
     'my-requests': <MyRequests />,
     checkin: <Checkin user={user} />,

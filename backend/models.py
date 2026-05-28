@@ -316,6 +316,24 @@ class RequestVote(Base):
 
 
 # ════════════════════════════════════════════════════════════════════
+# 14. Activation Codes (卡密系统)
+# ════════════════════════════════════════════════════════════════════
+
+
+class ActivationCode(Base):
+    __tablename__ = "activation_codes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    code = Column(String(64), unique=True, nullable=False, index=True)
+    points = Column(Integer, default=0)
+    is_used = Column(Integer, default=0)
+    used_by = Column(Integer, nullable=True)       # PanelUser.id
+    used_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_by = Column(Integer, nullable=False)   # PanelUser.id (admin)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ════════════════════════════════════════════════════════════════════
 # Engine & helpers
 # ════════════════════════════════════════════════════════════════════
 
