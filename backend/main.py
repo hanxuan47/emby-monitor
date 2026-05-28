@@ -98,8 +98,18 @@ FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 
 
 @app.get("/")
-async def serve_index():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+async def serve_login():
+    return FileResponse(os.path.join(FRONTEND_DIR, "login.html"))
+
+
+@app.get("/user")
+async def serve_user():
+    return FileResponse(os.path.join(FRONTEND_DIR, "user.html"))
+
+
+@app.get("/admin")
+async def serve_admin():
+    return FileResponse(os.path.join(FRONTEND_DIR, "admin.html"))
 
 
 # ── Config endpoints ────────────────────────────────────────────────
