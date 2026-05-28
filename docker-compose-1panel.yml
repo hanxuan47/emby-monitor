@@ -1,0 +1,23 @@
+services:
+  emby-monitor:
+    image: python:3.12-slim
+    container_name: emby-monitor
+    ports:
+      - "8000:8000"
+    volumes:
+      # 源码目录（克隆下来的项目根目录）
+      - ./emby-monitor:/app
+      # 数据持久化（数据库 + 加密密钥）
+      - ./emby-monitor-data:/app/data
+    working_dir: /app
+    command: >
+      sh -c "
+        pip install -r backend/requirements.txt -q --no-cache-dir &&
+        uvicorn backend.main:app --host 0.0.0.0 --port 8000
+      "
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
+      # 🔑 如需固定加密密钥（强烈建议），取消注释并填入：
+      # - ENCRYPTION_KEY=your-base64-key-here
