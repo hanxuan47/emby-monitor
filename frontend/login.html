@@ -7,7 +7,6 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
-/* ── iOS Design System ─────────────────────────────────────────── */
 :root {
   --bg: #0a0c12;
   --bg2: rgba(26,29,39,0.55);
@@ -24,165 +23,37 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:-apple-system,'SF Pro Display','SF Pro Text','Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
-
-/* ── Glassmorphism foundation ──────────────────────────────────── */
-.glass{background:var(--glass);-webkit-backdrop-filter:blur(30px) saturate(1.4);backdrop-filter:blur(30px) saturate(1.4);border:1px solid var(--border);border-radius:16px}
-.glass-card{background:rgba(18,21,31,0.7);-webkit-backdrop-filter:blur(24px) saturate(1.3);backdrop-filter:blur(24px) saturate(1.3);border:1px solid var(--border);border-radius:18px;padding:1.25rem;margin-bottom:.75rem;transition:all .25s cubic-bezier(.22,1,.36,1)}
-.glass-card:hover{border-color:var(--border2);transform:translateY(-1px)}
-.glass-card-static{background:rgba(18,21,31,0.7);-webkit-backdrop-filter:blur(24px) saturate(1.3);backdrop-filter:blur(24px) saturate(1.3);border:1px solid var(--border);border-radius:18px;padding:1.25rem;margin-bottom:.75rem}
+.glass-card-static{background:rgba(18,21,31,0.7);-webkit-backdrop-filter:blur(24px) saturate(1.3);backdrop-filter:blur(24px) saturate(1.3);border:1px solid var(--border);border-radius:18px;padding:1.5rem}
 .glass-input{background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:12px;padding:.7rem 1rem;color:var(--text);font-size:.9rem;outline:none;width:100%;transition:all .2s;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .glass-input:focus{border-color:var(--accent);background:rgba(59,130,246,0.08);box-shadow:0 0 0 3px rgba(59,130,246,0.15)}
-select.glass-input{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='rgba(255,255,255,0.4)' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 1rem center;padding-right:2.5rem}
-
-/* ── Glass button styles ───────────────────────────────────────── */
 .glass-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.6rem 1.2rem;border-radius:12px;font-size:.875rem;font-weight:500;border:none;cursor:pointer;transition:all .2s cubic-bezier(.22,1,.36,1);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .glass-btn:active{transform:scale(.96)}
 .glass-btn-primary{background:linear-gradient(135deg,rgba(59,130,246,0.85),rgba(139,92,246,0.85));color:#fff;box-shadow:0 4px 15px rgba(59,130,246,0.25)}
 .glass-btn-primary:hover{box-shadow:0 6px 25px rgba(59,130,246,0.35);transform:translateY(-1px)}
-.glass-btn-secondary{background:var(--glass);border:1px solid var(--border);color:var(--text)}
-.glass-btn-secondary:hover{background:var(--glass2);border-color:var(--border2)}
-.glass-btn-danger{background:linear-gradient(135deg,rgba(220,38,38,0.8),rgba(185,28,28,0.8));color:#fff;box-shadow:0 4px 15px rgba(220,38,38,0.2)}
-.glass-btn-sm{padding:.4rem .75rem;font-size:.75rem;border-radius:8px}
-
-/* ── Stats ─────────────────────────────────────────────────────── */
-.stat-glass{background:rgba(18,21,31,0.65);-webkit-backdrop-filter:blur(24px) saturate(1.2);backdrop-filter:blur(24px) saturate(1.2);border:1px solid var(--border);border-radius:18px;padding:1.1rem 1.25rem;transition:all .25s cubic-bezier(.22,1,.36,1)}
-.stat-glass:hover{border-color:var(--border2);transform:translateY(-2px);box-shadow:0 12px 36px rgba(0,0,0,.3)}
-.stat-value{font-size:1.75rem;font-weight:700;letter-spacing:-.02em;line-height:1.1}
-.stat-label{font-size:.75rem;color:var(--text2);margin-top:.15rem;font-weight:500;letter-spacing:.02em}
-
-/* ── Tables ────────────────────────────────────────────────────── */
-.glass-table{width:100%;border-collapse:collapse;font-size:.85rem}
-.glass-table th{text-align:left;padding:.65rem .75rem;color:var(--text3);font-weight:500;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border)}
-.glass-table td{padding:.6rem .75rem;border-bottom:1px solid rgba(255,255,255,0.03)}
-.glass-table tr:active td{background:rgba(255,255,255,0.03)}
-.glass-table tr:last-child td{border-bottom:none}
-
-/* ── Badges ────────────────────────────────────────────────────── */
-.glass-badge{display:inline-flex;align-items:center;padding:.15rem .5rem;border-radius:999px;font-size:.7rem;font-weight:500;gap:.25rem}
-.glass-badge-green{background:rgba(52,211,153,0.12);color:#34d399;border:1px solid rgba(52,211,153,0.2)}
-.glass-badge-blue{background:rgba(96,165,250,0.12);color:#60a5fa;border:1px solid rgba(96,165,250,0.2)}
-.glass-badge-yellow{background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.2)}
-.glass-badge-red{background:rgba(248,113,113,0.12);color:#f87171;border:1px solid rgba(248,113,113,0.2)}
-.glass-badge-purple{background:rgba(167,139,250,0.12);color:#a78bfa;border:1px solid rgba(167,139,250,0.2)}
-.glass-badge-orange{background:rgba(251,146,60,0.12);color:#fb923c;border:1px solid rgba(251,146,60,0.2)}
-
-/* ── Pulse dot ─────────────────────────────────────────────────── */
-.pulse-dot{width:7px;height:7px;border-radius:50%;display:inline-block;position:relative}
-.pulse-dot.green{background:#34d399}
-.pulse-dot.green::after{content:'';position:absolute;inset:-2px;border-radius:50%;border:2px solid rgba(52,211,153,0.3);animation:pulse-ring 2s infinite}
-.pulse-dot.red{background:#f87171}
-@keyframes pulse-ring{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:0}}
-
-/* ── Spinner ───────────────────────────────────────────────────── */
-.glass-spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-/* ── Toast ──────────────────────────────────────────────────────── */
 .glass-toast{position:fixed;bottom:calc(1.5rem + var(--safe-bottom));left:50%;transform:translateX(-50%) translateY(120px);z-index:9999;padding:.75rem 1.5rem;border-radius:14px;font-size:.875rem;font-weight:500;white-space:nowrap;opacity:0;transition:all .4s cubic-bezier(.22,1,.36,1);pointer-events:none}
 .glass-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .glass-toast-success{background:rgba(6,78,59,0.85);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(5,150,105,0.3);color:#6ee7b7}
 .glass-toast-error{background:rgba(127,29,29,0.85);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(220,38,38,0.3);color:#fca5a5}
-
-/* ── Modal ─────────────────────────────────────────────────────── */
-.glass-modal-overlay{display:none;position:fixed;inset:0;z-index:100;align-items:flex-end;justify-content:center;background:rgba(0,0,0,0.5);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
-.glass-modal-overlay.open{display:flex}
-.glass-modal{background:rgba(21,24,33,0.95);-webkit-backdrop-filter:blur(40px) saturate(1.5);backdrop-filter:blur(40px) saturate(1.5);border:1px solid var(--border);border-radius:22px 22px 0 0;padding:1.5rem;width:100%;max-width:600px;max-height:80vh;overflow-y:auto;animation:slideUp .35s cubic-bezier(.22,1,.36,1)}
-@keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:translateY(0);opacity:1}}
-.glass-modal-handle{width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,0.15);margin:-.25rem auto .75rem}
-
-/* ── Page transitions ──────────────────────────────────────────── */
-.page{display:none;animation:fadeIn .3s ease}
-.page.active{display:block}
-@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-
-/* ── Section title ─────────────────────────────────────────────── */
-.section-title{font-size:1rem;font-weight:600;margin-bottom:.85rem;display:flex;align-items:center;gap:.5rem;color:var(--text)}
-
-/* ── Stars ─────────────────────────────────────────────────────── */
-.star{color:var(--text3);cursor:pointer;font-size:1.5rem;transition:color .15s}
-.star.active,.star:hover{color:#fbbf24}
-canvas{max-height:230px;max-width:100%}
-
-/* ── Sidebar ───────────────────────────────────────────────────── */
-.sidebar{width:230px;background:rgba(13,15,22,0.92);-webkit-backdrop-filter:blur(40px) saturate(1.3);backdrop-filter:blur(40px) saturate(1.3);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;height:100vh;position:sticky;top:0;z-index:50}
-.sidebar-link{display:flex;align-items:center;gap:.7rem;padding:.55rem .85rem;margin:0 .4rem;border-radius:10px;cursor:pointer;transition:all .15s;color:var(--text2);font-size:.825rem;font-weight:450;position:relative}
-.sidebar-link:hover{background:rgba(255,255,255,0.04);color:var(--text)}
-.sidebar-link.active{background:rgba(59,130,246,0.10);color:#60a5fa}
-.sidebar-link svg{width:16px;height:16px;flex-shrink:0;opacity:.7}
-.sidebar-link.active svg{opacity:1}
-.sidebar-label{padding:.7rem .85rem .3rem;font-size:.65rem;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
-
-/* ── Bottom Tab Bar (mobile) ──────────────────────────────────── */
-.tabbar{display:none;position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(13,15,22,0.92);-webkit-backdrop-filter:blur(40px) saturate(1.3);backdrop-filter:blur(40px) saturate(1.3);border-top:1px solid var(--border);padding:.3rem 0 calc(.3rem + var(--safe-bottom));justify-content:space-around}
-.tab-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:.3rem .3rem;cursor:pointer;color:var(--text3);transition:color .15s;border:none;background:none;min-width:0;flex:1}
-.tab-item.active{color:var(--accent)}
-.tab-item svg{width:22px;height:22px}
-.tab-item span{font-size:.6rem;font-weight:500;letter-spacing:-.01em}
-
-/* ── Login page ────────────────────────────────────────────────── */
 .login-bg{position:fixed;inset:0;z-index:-1;background:radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.08) 0%, transparent 60%),radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.06) 0%, transparent 50%),var(--bg)}
-
-/* ── Responsive ────────────────────────────────────────────────── */
-@media(max-width:768px){
-  .sidebar{display:none}
-  .tabbar{display:flex}
-  .main-area{padding:.75rem .75rem 5rem}
-  .stat-value{font-size:1.4rem}
-  .glass-card{padding:1rem;border-radius:14px}
-  .stat-glass{padding:.85rem 1rem;border-radius:14px}
-  .glass-modal{border-radius:18px 18px 0 0;padding:1.25rem}
-}
-@media(min-width:769px){
-  .main-area{padding:1.25rem 1.5rem 1.5rem;overflow-y:auto;height:100vh}
-}
-@media(min-width:1200px){
-  .sidebar{width:240px}
-}
-
-.overflow-x-auto{-webkit-overflow-scrolling:touch;overflow-x:auto}
-*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.08) transparent}
+.glass-spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:2rem auto}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 
-<!-- Toast -->
 <div id="toast" class="glass-toast"></div>
 
-<!-- Login -->
-<div id="loginPage" class="fixed inset-0 z-[999] flex items-center justify-center">
+<div id="pageRoot" class="fixed inset-0 z-[999] flex items-center justify-center">
   <div class="login-bg"></div>
   <div class="w-full max-w-sm px-6 py-8">
     <div class="text-center mb-8">
       <svg class="w-14 h-14 mx-auto mb-3" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="url(#lg)" stroke-width="1.8"/></svg>
       <h1 class="text-2xl font-bold tracking-tight">Emby <span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Monitor</span></h1>
-      <p class="text-sm mt-1" style="color:var(--text2)">影视管理面板</p>
+      <p class="text-sm mt-1" style="color:var(--text2)" id="pageSubtitle">加载中...</p>
     </div>
-    <div class="glass-card-static" style="padding:1.5rem">
-      <div id="loginTab" class="space-y-3.5">
-        <input id="loginUser" class="glass-input" placeholder="用户名" autocomplete="username">
-        <input id="loginPass" type="password" class="glass-input" placeholder="密码" autocomplete="current-password">
-        <button class="glass-btn glass-btn-primary w-full py-3" onclick="doLogin()">登录</button>
-        <div class="flex justify-between text-xs" style="color:var(--text2)">
-          <a href="#" onclick="showRegister()" class="hover:text-white transition-colors">注册账号</a>
-          <a href="#" onclick="showForgot()" class="hover:text-white transition-colors">忘记密码</a>
-        </div>
-      </div>
-      <div id="registerTab" class="space-y-3.5" style="display:none">
-        <input id="regUser" class="glass-input" placeholder="用户名" autocomplete="username">
-        <input id="regEmail" class="glass-input" placeholder="邮箱" autocomplete="email">
-        <input id="regPass" type="password" class="glass-input" placeholder="密码" autocomplete="new-password">
-        <button class="glass-btn glass-btn-primary w-full py-3" onclick="doRegister()">注册</button>
-        <div class="text-center text-xs" style="color:var(--text2)"><a href="#" onclick="showLogin()" class="hover:text-white transition-colors">已有账号？登录</a></div>
-      </div>
-      <div id="forgotTab" class="space-y-3.5" style="display:none">
-        <input id="forgotEmail" class="glass-input" placeholder="注册邮箱" autocomplete="email">
-        <button class="glass-btn glass-btn-primary w-full py-3" onclick="doForgot()">发送重置码</button>
-        <div id="resetFields" style="display:none" class="space-y-3.5">
-          <input id="resetCode" class="glass-input" placeholder="验证码">
-          <input id="resetNewPass" type="password" class="glass-input" placeholder="新密码">
-          <button class="glass-btn glass-btn-primary w-full py-3" onclick="doResetPass()">重置密码</button>
-        </div>
-        <div class="text-center text-xs" style="color:var(--text2)"><a href="#" onclick="showLogin()" class="hover:text-white transition-colors">返回登录</a></div>
+    <div class="glass-card-static" id="formContainer">
+      <div id="loadingView" class="text-center py-6">
+        <div class="glass-spinner"></div>
       </div>
     </div>
   </div>
@@ -193,30 +64,69 @@ canvas{max-height:230px;max-width:100%}
 <script>
 const API='',TK='ebt',UK='ebu';
 
-function st(m,t='success'){const e=document.getElementById('toast');e.textContent=m;e.className='glass-toast glass-toast-'+t+' show';setTimeout(()=>e.classList.remove('show'),2800)}
-function sr(){['loginTab','registerTab','forgotTab'].forEach(i=>document.getElementById(i).style.display='none');document.getElementById(arguments[0]).style.display=''}
+function st(m,t){const e=document.getElementById('toast');e.textContent=m;e.className='glass-toast glass-toast-'+t+' show';setTimeout(()=>e.classList.remove('show'),2800)}
 function apiG(p){return fetch(API+p).then(r=>r.json())}
 function apiP(p,params){const qs=new URLSearchParams(params).toString();return fetch(API+p+'?'+qs,{method:'POST'}).then(r=>r.json())}
-function showRegister(){sr('registerTab')}
-function showLogin(){sr('loginTab')}
-function showForgot(){sr('forgotTab')}
-async function doRegister(){const u=document.getElementById('regUser').value.trim(),e=document.getElementById('regEmail').value.trim(),p=document.getElementById('regPass').value;if(!u||!e||!p)return st('请填写完整','error');const r=await apiP('/api/auth/register',{username:u,email:e,password:p});if(r.ok){st(r.is_admin?'🎉 你是管理员！请登录':'注册成功');showLogin()}else st(r.error||'注册失败','error')}
 
-async function checkRegistration(){try{const r=await apiG('/api/auth/register-status');if(!r.enabled){const el=document.getElementById('registerLink');if(el)el.style.display='none';const tab=document.getElementById('registerTab');if(tab)tab.innerHTML='<div class=\"text-center py-6\" style=\"color:var(--text2);font-size:.85rem\">🔒 注册已关闭</div>'}}catch(e){}}
-async function doLogin(){const u=document.getElementById('loginUser').value.trim(),p=document.getElementById('loginPass').value;if(!u||!p)return st('请输入用户名和密码','error');const r=await apiP('/api/auth/login',{username:u,password:p});if(r.ok){localStorage.setItem(TK,r.token);localStorage.setItem(UK,JSON.stringify(r.user));window.location.href=r.user.role==='admin'?'/admin':'/user'}else st(r.error||'登录失败','error')}
-function doLogout(){localStorage.removeItem(TK);localStorage.removeItem(UK);window.location.href='/'}
-async function doForgot(){const e=document.getElementById('forgotEmail').value.trim();if(!e)return st('请输入邮箱','error');const r=await apiP('/api/auth/forgot-password',{email:e});st('重置码已发送');document.getElementById('resetFields').style.display=''}
-async function doResetPass(){const e=document.getElementById('forgotEmail').value.trim(),c=document.getElementById('resetCode').value.trim(),p=document.getElementById('resetNewPass').value;if(!e||!c||!p)return st('请填写完整','error');const r=await apiP('/api/auth/reset-password',{email:e,code:c,new_password:p});r.ok?(st('密码已重置'),showLogin()):st(r.error||'重置失败','error')}
+function showSetupForm(){
+  document.getElementById('pageSubtitle').textContent='首次使用 · 创建管理员';
+  document.getElementById('formContainer').innerHTML=`
+    <div id="setupTab" class="space-y-3.5">
+      <input id="suUser" class="glass-input" placeholder="管理员用户名" autocomplete="username">
+      <input id="suEmail" class="glass-input" placeholder="邮箱" autocomplete="email">
+      <input id="suPass" type="password" class="glass-input" placeholder="密码" autocomplete="new-password">
+      <button class="glass-btn glass-btn-primary w-full py-3" onclick="doSetup()">🚀 初始化</button>
+    </div>`;
+}
 
-document.addEventListener('DOMContentLoaded',()=>{
+function showLoginForm(){
+  document.getElementById('pageSubtitle').textContent='影视管理面板';
+  document.getElementById('formContainer').innerHTML=`
+    <div id="loginTab" class="space-y-3.5">
+      <input id="loginUser" class="glass-input" placeholder="用户名" autocomplete="username">
+      <input id="loginPass" type="password" class="glass-input" placeholder="密码" autocomplete="current-password">
+      <button class="glass-btn glass-btn-primary w-full py-3" onclick="doLogin()">登录</button>
+    </div>`;
+}
+
+async function doSetup(){
+  const u=document.getElementById('suUser').value.trim(),
+        e=document.getElementById('suEmail').value.trim(),
+        p=document.getElementById('suPass').value;
+  if(!u||!e||!p)return st('请填写完整','error');
+  const r=await apiP('/api/auth/register',{username:u,email:e,password:p});
+  if(r.ok&&r.is_admin){
+    st('🎉 管理员创建成功！请登录','success');
+    showLoginForm();
+  }else st(r.error||'创建失败','error');
+}
+
+async function doLogin(){
+  const u=document.getElementById('loginUser').value.trim(),
+        p=document.getElementById('loginPass').value;
+  if(!u||!p)return st('请输入用户名和密码','error');
+  const r=await apiP('/api/auth/login',{username:u,password:p});
+  if(r.ok){
+    localStorage.setItem(TK,r.token);
+    localStorage.setItem(UK,JSON.stringify(r.user));
+    window.location.href='/admin';
+  }else st(r.error||'登录失败','error');
+}
+
+document.addEventListener('DOMContentLoaded',async()=>{
   const tok=localStorage.getItem(TK);
   if(tok){
     try{
       const u=JSON.parse(localStorage.getItem(UK)||'{}');
-      window.location.href=u.role==='admin'?'/admin':'/user';
+      window.location.href='/admin';
+      return;
     }catch(e){}
   }
-  checkRegistration();
+  try{
+    const rs=await apiG('/api/auth/register-status');
+    if(rs.has_admin)showLoginForm();
+    else showSetupForm();
+  }catch(e){showLoginForm()}
 });
 </script>
 </body>
