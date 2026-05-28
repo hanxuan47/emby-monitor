@@ -9,8 +9,9 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
+      # 📁 数据库路径（必须在 volume 挂载目录内，否则重启丢失）
+      - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
+      # 🔐 加密密钥文件路径（与数据库同目录自动推导，无需单独设置）
       # 🔑 加密密钥（强烈建议设置固定密钥，防止数据迁移后无法解密）
       # 生成命令: docker compose run --rm emby-monitor python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
       # - ENCRYPTION_KEY=your-base64-key-here
-      # 🔐 加密密钥文件路径（若未设置 ENCRYPTION_KEY，自动在此路径生成密钥文件）
-      - ENCRYPTION_KEY_FILE=/app/data/.encryption_key
