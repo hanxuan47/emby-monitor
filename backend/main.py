@@ -17,12 +17,12 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from emby_crypto import decrypt as crypto_decrypt
-from emby_crypto import encrypt as crypto_encrypt
-from emby_client import EmbyClient
-from feature_routes import router as feature_router
-from feature_routes import set_emby as set_features_emby
-from models import (
+from .emby_crypto import decrypt as crypto_decrypt
+from .emby_crypto import encrypt as crypto_encrypt
+from .emby_client import EmbyClient
+from .feature_routes import router as feature_router
+from .feature_routes import set_emby as set_features_emby
+from .models import (
     LibrarySnapshot,
     LoginCode,
     ServerConfig,
@@ -149,7 +149,7 @@ async def config_status():
 @app.get("/api/config/masked")
 async def config_masked(db_session: AsyncSession = Depends(get_session)):
     """Return config with masked secrets for frontend display."""
-    from emby_crypto import mask as crypto_mask
+    from .emby_crypto import mask as crypto_mask
     if not emby:
         return {"connected": False}
     result = await db_session.execute(select(ServerConfig))
