@@ -9,7 +9,6 @@
 <style>
 :root {
   --bg: #0a0c12;
-  --bg2: rgba(26,29,39,0.55);
   --glass: rgba(255,255,255,0.06);
   --glass2: rgba(255,255,255,0.10);
   --border: rgba(255,255,255,0.07);
@@ -18,7 +17,6 @@
   --text2: rgba(255,255,255,0.50);
   --text3: rgba(255,255,255,0.30);
   --accent: #3b82f6;
-  --accent2: #8b5cf6;
   --safe-bottom: env(safe-area-inset-bottom,0px);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -68,10 +66,12 @@ function st(m,t){const e=document.getElementById('toast');e.textContent=m;e.clas
 function apiG(p){return fetch(API+p).then(r=>r.json())}
 function apiP(p,params){const qs=new URLSearchParams(params).toString();return fetch(API+p+'?'+qs,{method:'POST'}).then(r=>r.json())}
 
+function sr(id){document.querySelectorAll('.tab-pane').forEach(e=>e.style.display='none');document.getElementById(id).style.display=''}
+
 function showSetupForm(){
   document.getElementById('pageSubtitle').textContent='首次使用 · 创建管理员';
   document.getElementById('formContainer').innerHTML=`
-    <div id="setupTab" class="space-y-3.5">
+    <div class="space-y-3.5">
       <input id="suUser" class="glass-input" placeholder="管理员用户名" autocomplete="username">
       <input id="suEmail" class="glass-input" placeholder="邮箱" autocomplete="email">
       <input id="suPass" type="password" class="glass-input" placeholder="密码" autocomplete="new-password">
@@ -82,10 +82,18 @@ function showSetupForm(){
 function showLoginForm(){
   document.getElementById('pageSubtitle').textContent='影视管理面板';
   document.getElementById('formContainer').innerHTML=`
-    <div id="loginTab" class="space-y-3.5">
+    <div id="loginTab" class="tab-pane space-y-3.5">
       <input id="loginUser" class="glass-input" placeholder="用户名" autocomplete="username">
       <input id="loginPass" type="password" class="glass-input" placeholder="密码" autocomplete="current-password">
       <button class="glass-btn glass-btn-primary w-full py-3" onclick="doLogin()">登录</button>
+      <div class="text-center text-xs" style="color:var(--text2)"><a href="#" onclick="sr('registerTab');return false" id="regLink" class="hover:text-white transition-colors">注册账号</a></div>
+    </div>
+    <div id="registerTab" class="tab-pane space-y-3.5" style="display:none">
+      <input id="regUser" class="glass-input" placeholder="用户名" autocomplete="username">
+      <input id="regEmail" class="glass-input" placeholder="邮箱" autocomplete="email">
+      <input id="regPass" type="password" class="glass-input" placeholder="密码" autocomplete="new-password">
+      <button class="glass-btn glass-btn-primary w-full py-3" onclick="doRegister()">注册</button>
+      <div class="text-center text-xs" style="color:var(--text2)"><a href="#" onclick="sr('loginTab');return false" class="hover:text-white transition-colors">已有账号？登录</a></div>
     </div>`;
 }
 
@@ -98,6 +106,7 @@ async function doSetup(){
   if(r.ok&&r.is_admin){
     st('🎉 管理员创建成功！请登录','success');
     showLoginForm();
+    document.getElementById('regLink').style.display='none';
   }else st(r.error||'创建失败','error');
 }
 
@@ -109,8 +118,18 @@ async function doLogin(){
   if(r.ok){
     localStorage.setItem(TK,r.token);
     localStorage.setItem(UK,JSON.stringify(r.user));
-    window.location.href='/admin';
+    window.location.href=r.user.role==='admin'?'/admin':'/user';
   }else st(r.error||'登录失败','error');
+}
+
+async function doRegister(){
+  const u=document.getElementById('regUser').value.trim(),
+        e=document.getElementById('regEmail').value.trim(),
+        p=document.getElementById('regPass').value;
+  if(!u||!e||!p)return st('请填写完整','error');
+  const r=await apiP('/api/auth/register',{username:u,email:e,password:p});
+  if(r.ok){st('注册成功，请登录','success');sr('loginTab')}
+  else st(r.error||'注册失败','error');
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{
@@ -118,14 +137,14 @@ document.addEventListener('DOMContentLoaded',async()=>{
   if(tok){
     try{
       const u=JSON.parse(localStorage.getItem(UK)||'{}');
-      window.location.href='/admin';
-      return;
+      window.location.href='/admin';return;
     }catch(e){}
   }
   try{
     const rs=await apiG('/api/auth/register-status');
-    if(rs.has_admin)showLoginForm();
-    else showSetupForm();
+    if(!rs.has_admin){showSetupForm();return}
+    showLoginForm();
+    if(!rs.enabled)document.getElementById('regLink').style.display='none';
   }catch(e){showLoginForm()}
 });
 </script>

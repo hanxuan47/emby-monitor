@@ -131,6 +131,20 @@ async def register(
     if len(password) < 4:
         return {"error": "密码至少4位"}
 
+    # After first admin is created, check registration toggle
+    admin_exists = await db.execute(
+        select(PanelUser).where(PanelUser.role == "admin").limit(1)
+    )
+    has_admin = admin_exists.scalar_one_or_none() is not None
+
+    if has_admin:
+        cfg_result = await db.execute(
+            select(PanelConfig).where(PanelConfig.key == "registration_enabled")
+        )
+        cfg = cfg_result.scalar_one_or_none()
+        if cfg and cfg.value == "0":
+            return {"error": "注册已关闭"}
+
     existing = await db.execute(
         select(PanelUser).where(
             (PanelUser.username == username) | (PanelUser.email == email)
