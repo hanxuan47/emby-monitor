@@ -1,6 +1,8 @@
 services:
   emby-monitor:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: emby-monitor
     ports:
       - "8000:8000"
