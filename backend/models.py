@@ -9,7 +9,12 @@ from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
-DATABASE_URL = "sqlite+aiosqlite:///data/emby_monitor.db"
+import os
+
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "sqlite+aiosqlite:///data/emby_monitor.db",
+)
 
 
 class Base(DeclarativeBase):
@@ -348,6 +353,21 @@ class AiInsight(Base):
     content = Column(Text, default="")
     severity = Column(String(16), default="info")  # info, warning, danger
     auto_action = Column(String(64), default="")   # suggest disable, etc.
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ════════════════════════════════════════════════════════════════════
+# 16. AI Whitelist (AI分析白名单)
+# ════════════════════════════════════════════════════════════════════
+
+
+class AiWhitelist(Base):
+    __tablename__ = "ai_whitelist"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    panel_user_id = Column(Integer, nullable=False, unique=True, index=True)
+    reason = Column(String(256), default="")
+    is_active = Column(Integer, default=1)
+    created_by = Column(Integer, nullable=True)  # admin PanelUser.id
     created_at = Column(DateTime, default=datetime.utcnow)
 
 

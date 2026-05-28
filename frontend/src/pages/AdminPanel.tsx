@@ -9,6 +9,7 @@ import CardManage from './CardManage'
 import { AiAdminPanel } from './AiPanel'
 import { TgBroadcast } from './TgBind'
 import { MyRequests, AdminRequests } from './Requests'
+import { UserMap } from './UserMap'
 
 // ─── Page Components ─────────────────────────────────────────
 
@@ -309,6 +310,7 @@ export default function AdminPanel() {
     tickets: <Placeholder name="工单" />,
     'admin-requests': <AdminRequests />,
     'ai-admin': <AiAdminPanel />,
+    'user-map': <UserMap />,
     broadcast: <TgBroadcast />,
     notifications: <Placeholder name="通知" />,
     settings: <Settings user={user} isAdmin={true} />,

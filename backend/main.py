@@ -26,6 +26,7 @@ from .models import (
     ActivationCode,
     LibrarySnapshot,
     LoginCode,
+    PanelConfig,
     ServerConfig,
     SessionHistory,
     UserActivity,
@@ -112,27 +113,6 @@ app.add_middleware(
 
 # Include feature routes
 app.include_router(feature_router)
-
-
-# ── Serve SPA frontend (React build) ─────────────────────────────────
-
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
-
-SPA_PATHS = {"/", "/setup", "/admin", "/user"}
-
-
-@app.get("/assets/{file_path:path}")
-async def serve_assets(file_path: str):
-    return FileResponse(os.path.join(FRONTEND_DIR, "assets", file_path))
-
-
-@app.get("/{full_path:path}")
-async def serve_spa(full_path: str):
-    # API routes are handled by other endpoints
-    if full_path.startswith("api/") or full_path.startswith("ws"):
-        return {"error": "Not found"}
-    # Serve index.html for all frontend routes (SPA)
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 
 # ── Config endpoints ────────────────────────────────────────────────
@@ -408,6 +388,72 @@ async def user_activity(
         "today_active_users": today_active,
         "period_days": days,
     }
+
+
+# ── User Location Map (IP → Geo) ────────────────────────────────
+
+
+import httpx
+
+
+@app.get("/api/users/map")
+async def user_map():
+    """Return user locations based on Emby session IP addresses."""
+    if not emby:
+        return {"error": "Not connected", "locations": []}
+
+    sessions = await emby.get_sessions()
+    locations = []
+
+    async def resolve_ip(ip: str) -> dict:
+        """Resolve IP to geographic location via ip-api.com."""
+        try:
+            async with httpx.AsyncClient(timeout=5) as cl:
+                resp = await cl.get(f"http://ip-api.com/json/{ip}?fields=status,lat,lon,city,country,isp,query")
+                data = resp.json()
+                if data.get("status") == "success":
+                    return {
+                        "lat": data["lat"],
+                        "lng": data["lon"],
+                        "city": data.get("city", ""),
+                        "country": data.get("country", ""),
+                        "isp": data.get("isp", ""),
+                    }
+        except Exception:
+            pass
+        return {
+            "lat": 0,
+            "lng": 0,
+            "city": ip,
+            "country": "",
+            "isp": "",
+        }
+
+    tasks = []
+    seen_ips = set()
+    for s in sessions:
+        ip = (s.get("RemoteEndPoint") or "").split(":")[0]  # Strip port
+        if not ip or ip in seen_ips or ip == "127.0.0.1" or ip.startswith("192.168.") or ip.startswith("10.") or ip.startswith("172."):
+            continue
+        if not s.get("NowPlayingItem"):
+            continue
+        seen_ips.add(ip)
+        user_name = s.get("UserName", "未知")
+        device = (s.get("DeviceName") or s.get("Client", "")) or "未知设备"
+        item_name = (s.get("NowPlayingItem") or {}).get("Name", "")
+        tasks.append((ip, user_name, device, item_name, resolve_ip(ip)))
+
+    for ip, user_name, device, item_name, coro in tasks:
+        geo = await coro
+        locations.append({
+            "user_name": user_name,
+            "device": device,
+            "item_name": item_name,
+            "ip": ip,
+            **geo,
+        })
+
+    return {"locations": locations, "total": len(locations)}
 
 
 @app.get("/api/recently-added")
@@ -903,6 +949,27 @@ async def trigger_refresh(db_session: AsyncSession = Depends(get_session)):
             act.duration_seconds += 30  # Placeholder per poll cycle
 
     return {"ok": True, "active_streams": len(streams)}
+
+
+# ── Serve SPA frontend (React build) — MUST be last route ─────────────
+
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
+
+SPA_PATHS = {"/", "/setup", "/admin", "/user"}
+
+
+@app.get("/assets/{file_path:path}")
+async def serve_assets(file_path: str):
+    return FileResponse(os.path.join(FRONTEND_DIR, "assets", file_path))
+
+
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    # API routes are handled by earlier endpoints
+    if full_path.startswith("api/") or full_path.startswith("ws"):
+        return {"error": "Not found"}
+    # Serve index.html for all frontend routes (SPA)
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 
 # ── Helper for the background poll timer ────────────────────────────

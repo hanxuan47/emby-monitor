@@ -23,8 +23,26 @@ DEFAULT_KEY_FILE = "/app/data/.encryption_key"
 
 
 def _get_key_file() -> str:
-    """Return the encryption key file path, respecting env override."""
-    return os.environ.get("ENCRYPTION_KEY_FILE", DEFAULT_KEY_FILE)
+    """Return the encryption key file path, respecting env override.
+    
+    Priority:
+    1. ENCRYPTION_KEY_FILE env var
+    2. Derived from DATABASE_URL directory (if set)
+    3. /app/data/.encryption_key (Docker default)
+    """
+    env_file = os.environ.get("ENCRYPTION_KEY_FILE", "").strip()
+    if env_file:
+        return env_file
+    # Try to derive from DATABASE_URL
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    if db_url:
+        # sqlite+aiosqlite:////path/to/db.db -> /path/to/.encryption_key
+        path = db_url.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
+        if path:
+            dirname = os.path.dirname(path)
+            if dirname:
+                return os.path.join(dirname, ".encryption_key")
+    return DEFAULT_KEY_FILE
 
 
 def _ensure_key() -> bytes:
@@ -140,8 +158,7 @@ def verify_password(password: str, stored: str) -> bool:
     try:
         parts = stored.split("$")
         if len(parts) != 5 or parts[0] != "" or parts[1] != "pbkdf2-sha256":
-            # Legacy SHA256 fallback
-            return hashlib.sha256(password.encode()).hexdigest() == stored
+            return False  # Reject legacy SHA256 hashes
         rounds = int(parts[2])
         salt = parts[3]
         expected_hash = parts[4]

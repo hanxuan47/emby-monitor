@@ -1,6 +1,6 @@
 services:
   emby-monitor:
-    build: https://github.com/hanxuan47/emby-monitor.git
+    build: .
     container_name: emby-monitor
     ports:
       - "8000:8000"
@@ -12,3 +12,5 @@ services:
       # 🔑 加密密钥（强烈建议设置固定密钥，防止数据迁移后无法解密）
       # 生成命令: docker compose run --rm emby-monitor python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
       # - ENCRYPTION_KEY=your-base64-key-here
+      # 🔐 加密密钥文件路径（若未设置 ENCRYPTION_KEY，自动在此路径生成密钥文件）
+      - ENCRYPTION_KEY_FILE=/app/data/.encryption_key

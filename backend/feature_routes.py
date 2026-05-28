@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,7 @@ from .emby_client import EmbyClient
 from .models import (
     ActivationCode,
     AiInsight,
+    AiWhitelist,
     CheckinRecord,
     LoginCode,
     MediaRequest,
@@ -57,22 +58,95 @@ def set_emby(client: EmbyClient | None):
     emby = client
 
 
+# ── Rate limiter (in-memory, per-IP) ─────────────────────────────────
+
+import collections
+import time
+
+_login_attempts: dict[str, list[float]] = collections.defaultdict(list)
+LOGIN_RATE_LIMIT = 10       # max attempts
+LOGIN_RATE_WINDOW = 300     # 5 minutes
+
+
+def _check_rate_limit(ip: str) -> bool:
+    """Return True if rate limited."""
+    now = time.time()
+    attempts = _login_attempts[ip]
+    # Prune old entries
+    _login_attempts[ip] = [t for t in attempts if now - t < LOGIN_RATE_WINDOW]
+    if len(_login_attempts[ip]) >= LOGIN_RATE_LIMIT:
+        return True
+    _login_attempts[ip].append(now)
+    return False
+
+
 # ── Helpers ─────────────────────────────────────────────────────────
 
 
+def _get_hmac_key() -> bytes:
+    """Derive token HMAC key from ENCRYPTION_KEY instead of hardcoded secret."""
+    try:
+        from .emby_crypto import _ensure_key
+        master = _ensure_key()
+        return hashlib.sha256(master + b":token-hmac").digest()
+    except Exception:
+        # Fallback (should never happen in production)
+        import os
+        return hashlib.sha256(os.urandom(32)).digest()
+
+
+TOKEN_EXPIRY_DAYS = 7
+
+
 def gen_token(user_id: int, role: str) -> str:
-    raw = f"{user_id}:{role}:{datetime.utcnow().isoformat()}:emby-monitor-secret"
-    return hashlib.sha256(raw.encode()).hexdigest()
+    exp = int((datetime.utcnow() + timedelta(days=TOKEN_EXPIRY_DAYS)).timestamp())
+    raw = f"{user_id}:{role}:{exp}"
+    key = _get_hmac_key()
+    sig = hmac.new(key, raw.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{user_id}:{role}:{exp}:{sig}"
 
 
 def decode_token(token: str) -> dict | None:
     try:
         parts = token.split(":")
-        if len(parts) >= 2:
-            return {"user_id": int(parts[0]), "role": parts[1]}
+        if len(parts) >= 4:
+            uid, role, exp_str, sig = parts[0], parts[1], parts[2], parts[3]
+            exp = int(exp_str)
+            if exp < datetime.utcnow().timestamp():
+                return None  # expired
+            key = _get_hmac_key()
+            raw = f"{uid}:{role}:{exp}"
+            expected = hmac.new(key, raw.encode(), hashlib.sha256).hexdigest()[:16]
+            if sig == expected:
+                return {"user_id": int(uid), "role": role}
+        # Legacy token (no expiry): uid:role:sig — accept but decode without expiry
+        elif len(parts) == 3:
+            uid, role, sig = parts[0], parts[1], parts[2]
+            key = _get_hmac_key()
+            # Try old hardcoded key first, then new key
+            old_key = b"emby-monitor-secret"
+            for k in [old_key, key]:
+                expected = hmac.new(k, f"{uid}:{role}".encode(), hashlib.sha256).hexdigest()[:16]
+                if sig == expected:
+                    return {"user_id": int(uid), "role": role}
     except Exception:
         pass
     return None
+
+
+def resolve_token_str(
+    authorization: str = Header(default=""),
+    token: str = Query(default=""),
+) -> str:
+    """Resolve token string from Authorization header (preferred) or query param.
+    
+    Priority:
+    1. Authorization: Bearer xxx header
+    2. token=xxx query parameter (legacy)
+    """
+    if authorization.startswith("Bearer "):
+        return authorization[7:]
+    return token
 
 
 async def hash_password(pw: str) -> str:
@@ -157,8 +231,8 @@ async def register(
 ):
     """Register a new panel user. First user auto-becomes admin.
     After admin exists, users must provide a valid card key."""
-    if len(password) < 4:
-        return {"error": "密码至少4位"}
+    if len(password) < 8:
+        return {"error": "密码至少8位"}
 
     admin_exists = await db.execute(
         select(PanelUser).where(PanelUser.role == "admin").limit(1)
@@ -205,7 +279,7 @@ async def register(
     user = PanelUser(
         username=username,
         email=email,
-        password_hash=hash_password(password),
+        password_hash=await hash_password(password),
         role="admin" if is_first else "user",
     )
     db.add(user)
@@ -230,11 +304,17 @@ async def register(
 
 @router.post("/api/auth/login")
 async def login(
+    request: Request,
     username: str = Query(...),
     password: str = Query(...),
     db: AsyncSession = Depends(get_session),
 ):
     """Login and return auth token."""
+    # Rate limit: 10 attempts per 5 minutes per IP
+    client_ip = request.client.host if request.client else "unknown"
+    if _check_rate_limit(client_ip):
+        return {"error": "登录尝试过于频繁，请5分钟后再试"}
+
     result = await db.execute(
         select(PanelUser).where(PanelUser.username == username)
     )
@@ -294,7 +374,7 @@ async def register_status(db: AsyncSession = Depends(get_session)):
 
 @router.post("/api/admin/registration")
 async def toggle_registration(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     enabled: str = Query(...),
     db: AsyncSession = Depends(get_session),
 ):
@@ -321,7 +401,7 @@ async def toggle_registration(
 
 @router.get("/api/auth/me")
 async def get_profile(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Get current user profile from token."""
@@ -383,8 +463,8 @@ async def reset_password(
     db: AsyncSession = Depends(get_session),
 ):
     """Reset password using verification code."""
-    if len(new_password) < 4:
-        return {"error": "密码至少4位"}
+    if len(new_password) < 8:
+        return {"error": "密码至少8位"}
 
     result = await db.execute(
         select(PasswordReset).where(
@@ -402,7 +482,7 @@ async def reset_password(
     result = await db.execute(select(PanelUser).where(PanelUser.email == email))
     user = result.scalar_one_or_none()
     if user:
-        user.password_hash = hash_password(new_password)
+        user.password_hash = await hash_password(new_password)
 
     await db.commit()
     return {"ok": True, "message": "密码已重置"}
@@ -410,7 +490,7 @@ async def reset_password(
 
 @router.post("/api/auth/update-profile")
 async def update_profile(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     emby_username: str = Query(""),
     emby_user_id: str = Query(""),
     db: AsyncSession = Depends(get_session),
@@ -449,7 +529,7 @@ async def media_recent(limit: int = Query(30)):
 
 @router.post("/api/media/review")
 async def add_review(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     emby_item_id: str = Query(...),
     item_name: str = Query(""),
     item_type: str = Query(""),
@@ -532,7 +612,7 @@ async def get_reviews(
 
 @router.get("/api/media/my-reviews")
 async def my_reviews(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Get all reviews by the current user."""
@@ -597,7 +677,8 @@ async def create_site(
     db: AsyncSession = Depends(get_session),
 ):
     """Add a new site route."""
-    site = SiteRoute(name=name, url=url, route_type=route_type, api_key=api_key, note=note)
+    encrypted_key = crypto_encrypt(api_key) if api_key else ""
+    site = SiteRoute(name=name, url=url, route_type=route_type, api_key=encrypted_key, note=note)
     db.add(site)
     await db.commit()
     await db.refresh(site)
@@ -680,7 +761,7 @@ async def test_all_sites(db: AsyncSession = Depends(get_session)):
 
 @router.post("/api/tickets/create")
 async def create_ticket(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     subject: str = Query(...),
     category: str = Query("general"),
     priority: str = Query("normal"),
@@ -712,7 +793,7 @@ async def create_ticket(
 
 @router.get("/api/tickets")
 async def list_tickets(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     status_filter: str = Query(""),
     db: AsyncSession = Depends(get_session),
 ):
@@ -756,7 +837,7 @@ async def list_tickets(
 @router.get("/api/tickets/{ticket_id}")
 async def get_ticket(
     ticket_id: int,
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Get ticket details with messages."""
@@ -808,7 +889,7 @@ async def get_ticket(
 @router.post("/api/tickets/{ticket_id}/reply")
 async def reply_ticket(
     ticket_id: int,
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     content: str = Query(...),
     db: AsyncSession = Depends(get_session),
 ):
@@ -861,7 +942,7 @@ async def reply_ticket(
 @router.post("/api/tickets/{ticket_id}/status")
 async def update_ticket_status(
     ticket_id: int,
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     status: str = Query(...),
     db: AsyncSession = Depends(get_session),
 ):
@@ -893,7 +974,7 @@ async def update_ticket_status(
 
 @router.post("/api/checkin")
 async def daily_checkin(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Daily check-in to earn points."""
@@ -952,7 +1033,7 @@ async def daily_checkin(
 
 @router.get("/api/checkin/status")
 async def checkin_status(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Get check-in status for current user."""
@@ -1065,7 +1146,7 @@ async def save_notify_config(
 
 @router.post("/api/notify/send")
 async def send_notification(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     channel: str = Query("email"),
     title: str = Query(...),
     content: str = Query(""),
@@ -1138,7 +1219,7 @@ async def send_notification(
 
 @router.get("/api/notify/logs")
 async def notify_logs(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     limit: int = Query(50),
     db: AsyncSession = Depends(get_session),
 ):
@@ -1212,7 +1293,7 @@ async def _get_tmdb_key(db: AsyncSession) -> str:
 
 @router.post("/api/config/tmdb")
 async def set_tmdb_config(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     api_key: str = Query(...),
     db: AsyncSession = Depends(get_session),
 ):
@@ -1314,7 +1395,7 @@ async def tmdb_trending(
 
 @router.post("/api/requests/create")
 async def create_request(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     tmdb_id: int = Query(...),
     media_type: str = Query(...),
     title: str = Query(...),
@@ -1356,7 +1437,7 @@ async def create_request(
 
 @router.post("/api/requests/vote")
 async def vote_request(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     request_id: int = Query(...),
     db: AsyncSession = Depends(get_session),
 ):
@@ -1389,7 +1470,7 @@ async def vote_request(
 
 @router.get("/api/requests/list")
 async def list_requests(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     status: str = Query(""),
     page: int = Query(1),
     limit: int = Query(20),
@@ -1447,7 +1528,7 @@ async def list_requests(
 @router.post("/api/requests/approve/{request_id}")
 async def approve_request(
     request_id: int,
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     note: str = Query(""),
     db: AsyncSession = Depends(get_session),
 ):
@@ -1479,7 +1560,7 @@ async def approve_request(
 @router.post("/api/requests/reject/{request_id}")
 async def reject_request(
     request_id: int,
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     note: str = Query(""),
     db: AsyncSession = Depends(get_session),
 ):
@@ -1512,7 +1593,7 @@ async def reject_request(
 @router.post("/api/requests/downloaded/{request_id}")
 async def mark_downloaded(
     request_id: int,
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Admin: mark a request as downloaded."""
@@ -1552,7 +1633,7 @@ def generate_card_code() -> str:
 
 @router.post("/api/admin/cards/create")
 async def create_cards(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     count: int = Query(default=1, ge=1, le=100),
     points: int = Query(default=0, ge=0),
     expire_days: int = Query(default=0, ge=0),
@@ -1583,7 +1664,7 @@ async def create_cards(
 
 @router.get("/api/admin/cards/list")
 async def list_cards(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=200),
     db: AsyncSession = Depends(get_session),
@@ -1624,7 +1705,7 @@ async def list_cards(
 
 @router.post("/api/admin/cards/delete")
 async def delete_cards(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     ids: str = Query(...),  # comma-separated card IDs
     db: AsyncSession = Depends(get_session),
 ):
@@ -1671,7 +1752,7 @@ async def validate_card(
 
 @router.post("/api/tg/bind-code")
 async def get_tg_bind_code(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Generate a one-time binding code for the current user."""
@@ -1689,7 +1770,7 @@ async def get_tg_bind_code(
 
 @router.get("/api/tg/binding-status")
 async def get_tg_binding_status(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Check if the current user has bound Telegram."""
@@ -1717,7 +1798,7 @@ async def get_tg_binding_status(
 
 @router.post("/api/tg/unbind")
 async def unbind_tg(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Unbind Telegram from the current user."""
@@ -1742,7 +1823,7 @@ async def unbind_tg(
 
 @router.post("/api/tg/broadcast")
 async def tg_broadcast(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     message: str = Query(...),
     db: AsyncSession = Depends(get_session),
 ):
@@ -1783,7 +1864,7 @@ async def tg_broadcast(
 
 @router.post("/api/ai/scan")
 async def ai_scan(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     user_id: int = Query(default=0),
     db: AsyncSession = Depends(get_session),
 ):
@@ -1801,18 +1882,16 @@ async def ai_scan(
         user = (await db.execute(select(PanelUser).where(PanelUser.id == user_id))).scalar_one_or_none()
         if not user:
             return {"error": "用户不存在"}
-        insights = await analyze_single_user(db, user)
+        insights = await analyze_single_user(db, user, emby)
         return {"ok": True, "user_id": user_id, "insights": len(insights)}
     else:
-        # Import emby from main module
-        from .main import emby
         result = await run_analysis(db, emby)
         return result
 
 
 @router.get("/api/ai/config")
 async def ai_get_config(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     db: AsyncSession = Depends(get_session),
 ):
     """Get AI analysis config."""
@@ -1829,14 +1908,36 @@ async def ai_get_config(
 
 @router.post("/api/ai/config")
 async def ai_save_config(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
+    # 基础
     enabled: str = Query("1"),
     inactive_days: int = Query(14),
     auto_disable_days: int = Query(30),
     anomaly_threshold: int = Query(5),
+    # 自动禁用
+    auto_disable_enabled: str = Query("0"),
+    # TG推送
+    tg_push_enabled: str = Query("0"),
+    tg_admin_chat_id: str = Query(""),
+    # 速率限制
+    rate_limit_enabled: str = Query("0"),
+    rate_limit_max_requests: int = Query(3),
+    # 客户端限制
+    client_restrictions: str = Query(""),
+    # 多设备检测
+    multi_device_enabled: str = Query("0"),
+    multi_device_max_sessions: int = Query(3),
+    # 白名单模式
+    whitelist_mode: str = Query("disabled"),
+    # LLM 分析增强
+    llm_enabled: str = Query("0"),
+    llm_provider: str = Query("custom"),
+    llm_api_url: str = Query(""),
+    llm_api_key: str = Query(""),
+    llm_model: str = Query("gpt-4o-mini"),
     db: AsyncSession = Depends(get_session),
 ):
-    """Save AI analysis config."""
+    """Save AI analysis config (extended)."""
     decoded = decode_token(token)
     if not decoded:
         return {"error": "请先登录"}
@@ -1849,6 +1950,22 @@ async def ai_save_config(
         "ai_inactive_days": str(inactive_days),
         "ai_auto_disable_days": str(auto_disable_days),
         "ai_anomaly_threshold": str(anomaly_threshold),
+        # 新设置
+        "ai_auto_disable_enabled": auto_disable_enabled,
+        "ai_tg_push_enabled": tg_push_enabled,
+        "ai_tg_admin_chat_id": tg_admin_chat_id,
+        "ai_rate_limit_enabled": rate_limit_enabled,
+        "ai_rate_limit_max_requests": str(rate_limit_max_requests),
+        "ai_client_restrictions": client_restrictions,
+        "ai_multi_device_enabled": multi_device_enabled,
+        "ai_multi_device_max_sessions": str(multi_device_max_sessions),
+        "ai_whitelist_mode": whitelist_mode,
+        # LLM
+        "ai_llm_enabled": llm_enabled,
+        "ai_llm_provider": llm_provider,
+        "ai_llm_api_url": llm_api_url,
+        "ai_llm_api_key": llm_api_key,
+        "ai_llm_model": llm_model,
     }
     for k, v in pairs.items():
         result = await db.execute(select(PanelConfig).where(PanelConfig.key == k))
@@ -1861,9 +1978,107 @@ async def ai_save_config(
     return {"ok": True}
 
 
+# ════════════════════════════════════════════════════════════════════
+# AI Whitelist CRUD
+# ════════════════════════════════════════════════════════════════════
+
+
+@router.get("/api/ai/whitelist")
+async def ai_get_whitelist(
+    token: str = Depends(resolve_token_str),
+    db: AsyncSession = Depends(get_session),
+):
+    """List all whitelist entries."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    viewer = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not viewer or viewer.role != "admin":
+        return {"error": "无权操作"}
+
+    result = await db.execute(
+        select(AiWhitelist).where(AiWhitelist.is_active == 1).order_by(AiWhitelist.created_at.desc())
+    )
+    items = []
+    for wl in result.scalars().all():
+        username = ""
+        if wl.panel_user_id:
+            u = (await db.execute(select(PanelUser.username).where(PanelUser.id == wl.panel_user_id))).scalar_one_or_none()
+            username = u or "(已删除)"
+        created_by_name = ""
+        if wl.created_by:
+            u = (await db.execute(select(PanelUser.username).where(PanelUser.id == wl.created_by))).scalar_one_or_none()
+            created_by_name = u or "(已删除)"
+        items.append({
+            "id": wl.id,
+            "panel_user_id": wl.panel_user_id,
+            "username": username,
+            "reason": wl.reason,
+            "created_by": wl.created_by,
+            "created_by_name": created_by_name,
+            "created_at": wl.created_at.isoformat(),
+        })
+    return {"ok": True, "items": items}
+
+
+@router.post("/api/ai/whitelist/add")
+async def ai_add_whitelist(
+    token: str = Depends(resolve_token_str),
+    panel_user_id: int = Query(...),
+    reason: str = Query(""),
+    db: AsyncSession = Depends(get_session),
+):
+    """Add user to AI whitelist."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    viewer = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not viewer or viewer.role != "admin":
+        return {"error": "无权操作"}
+
+    # Check if already whitelisted
+    existing = await db.execute(
+        select(AiWhitelist).where(AiWhitelist.panel_user_id == panel_user_id, AiWhitelist.is_active == 1)
+    )
+    if existing.scalar_one_or_none():
+        return {"error": "该用户已在白名单中"}
+
+    wl = AiWhitelist(
+        panel_user_id=panel_user_id,
+        reason=reason,
+        created_by=viewer.id,
+    )
+    db.add(wl)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/api/ai/whitelist/remove")
+async def ai_remove_whitelist(
+    token: str = Depends(resolve_token_str),
+    whitelist_id: int = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Remove user from AI whitelist."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    viewer = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not viewer or viewer.role != "admin":
+        return {"error": "无权操作"}
+
+    result = await db.execute(select(AiWhitelist).where(AiWhitelist.id == whitelist_id))
+    wl = result.scalar_one_or_none()
+    if not wl:
+        return {"error": "白名单条目不存在"}
+    wl.is_active = 0
+    await db.commit()
+    return {"ok": True}
+
+
 @router.get("/api/ai/insights")
 async def ai_get_insights(
-    token: str = Query(...),
+    token: str = Depends(resolve_token_str),
     user_id: int = Query(default=0),
     category: str = Query(default=""),
     db: AsyncSession = Depends(get_session),
