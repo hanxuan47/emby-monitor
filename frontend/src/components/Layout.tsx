@@ -12,6 +12,8 @@ interface NavItem {
 }
 
 const userNav: NavItem[] = [
+  { id: 'discovery', label: '影视发现', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
+  { id: 'my-requests', label: '我的求片', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
   { id: 'dashboard', label: '仪表盘', icon: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zm0 11h7v7h-7v-7zM3 14h7v7H3v-7z' },
   { id: 'checkin', label: '签到', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
   { id: 'streams', label: '实时流', icon: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664zM21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
@@ -24,6 +26,7 @@ const userNav: NavItem[] = [
 ]
 
 const adminExtra: NavItem[] = [
+  { id: 'admin-requests', label: '求片管理', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
   { id: 'sessions', label: '活跃会话', icon: 'M12 5a3 3 0 100 6 3 3 0 000-6zM2 19a6 6 0 0112 0H2zm16-6a3 3 0 100 6 3 3 0 000-6z' },
   { id: 'users', label: '用户活动', icon: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2m8-10a4 4 0 100-8 4 4 0 000 8zm10 6a4 4 0 100-8 4 4 0 000 8z' },
   { id: 'users-mgmt', label: 'Emby用户', icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z' },

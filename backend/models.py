@@ -286,6 +286,36 @@ class PanelConfig(Base):
 
 
 # ════════════════════════════════════════════════════════════════════
+# 9. Media Requests (求片系统)
+# ════════════════════════════════════════════════════════════════════
+
+
+class MediaRequest(Base):
+    __tablename__ = "media_requests"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, index=True)  # PanelUser.id
+    tmdb_id = Column(Integer, nullable=False)
+    media_type = Column(String(16), nullable=False)  # movie / tv
+    title = Column(String(256), nullable=False)
+    year = Column(String(4), default="")
+    poster_url = Column(String(512), default="")
+    overview = Column(Text, default="")
+    status = Column(String(16), default="pending")  # pending / approved / rejected / downloaded
+    admin_note = Column(Text, default="")
+    vote_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RequestVote(Base):
+    __tablename__ = "request_votes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    request_id = Column(Integer, nullable=False, index=True)
+    user_id = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ════════════════════════════════════════════════════════════════════
 # Engine & helpers
 # ════════════════════════════════════════════════════════════════════
 

@@ -25,11 +25,13 @@ from .emby_client import EmbyClient
 from .models import (
     CheckinRecord,
     LoginCode,
+    MediaRequest,
     MediaReview,
     NotificationLog,
     PanelConfig,
     PanelUser,
     PasswordReset,
+    RequestVote,
     SessionHistory,
     SiteRoute,
     SupportTicket,
@@ -1128,3 +1130,332 @@ async def kick_session(session_id: str):
         return {"ok": True, "message": f"Session {session_id} reported (manual kick may need Emby plugin)"}
     except Exception as e:
         return {"error": str(e)}
+
+
+# ════════════════════════════════════════════════════════════════════
+# TMDB — Search & Discovery
+# ════════════════════════════════════════════════════════════════════
+
+
+async def _get_tmdb_key(db: AsyncSession) -> str:
+    """Get TMDB API key from config."""
+    result = await db.execute(
+        select(PanelConfig).where(PanelConfig.key == "tmdb_api_key")
+    )
+    cfg = result.scalar_one_or_none()
+    return cfg.value if cfg else ""
+
+
+@router.post("/api/config/tmdb")
+async def set_tmdb_config(
+    token: str = Query(...),
+    api_key: str = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Save TMDB API key (admin only)."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    user = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not user or user.role != "admin":
+        return {"error": "无权操作"}
+    result = await db.execute(select(PanelConfig).where(PanelConfig.key == "tmdb_api_key"))
+    cfg = result.scalar_one_or_none()
+    if cfg:
+        cfg.value = api_key
+    else:
+        db.add(PanelConfig(key="tmdb_api_key", value=api_key))
+    await db.commit()
+    return {"ok": True}
+
+
+@router.get("/api/tmdb/search")
+async def tmdb_search(
+    q: str = Query(...),
+    page: int = Query(1),
+    db: AsyncSession = Depends(get_session),
+):
+    """Search TMDB for movies and TV shows."""
+    key = await _get_tmdb_key(db)
+    if not key:
+        return {"error": "请先在设置中配置 TMDB API Key"}
+
+    async with httpx.AsyncClient() as client:
+        # Search movies
+        movie_resp = await client.get(
+            "https://api.themoviedb.org/3/search/movie",
+            params={"api_key": key, "query": q, "language": "zh-CN", "page": page},
+        )
+        # Search TV
+        tv_resp = await client.get(
+            "https://api.themoviedb.org/3/search/tv",
+            params={"api_key": key, "query": q, "language": "zh-CN", "page": page},
+        )
+
+    movies = movie_resp.json().get("results", [])[:8]
+    tvs = tv_resp.json().get("results", [])[:8]
+
+    def fmt(item, mtype):
+        return {
+            "tmdb_id": item["id"],
+            "media_type": mtype,
+            "title": item.get("title") or item.get("name") or "",
+            "year": (item.get("release_date") or item.get("first_air_date") or "")[:4],
+            "poster": f"https://image.tmdb.org/t/p/w200{item.get('poster_path')}" if item.get("poster_path") else "",
+            "overview": (item.get("overview") or "")[:300],
+            "vote_average": item.get("vote_average", 0),
+        }
+
+    return {
+        "results": [fmt(m, "movie") for m in movies] + [fmt(t, "tv") for t in tvs],
+    }
+
+
+@router.get("/api/tmdb/trending")
+async def tmdb_trending(
+    page: int = Query(1),
+    db: AsyncSession = Depends(get_session),
+):
+    """Get trending content from TMDB."""
+    key = await _get_tmdb_key(db)
+    if not key:
+        return {"error": "请先配置 TMDB API Key"}
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.themoviedb.org/3/trending/all/week",
+            params={"api_key": key, "language": "zh-CN", "page": page},
+        )
+
+    results = resp.json().get("results", [])[:20]
+    return {
+        "results": [
+            {
+                "tmdb_id": r["id"],
+                "media_type": r.get("media_type", "movie"),
+                "title": r.get("title") or r.get("name") or "",
+                "year": (r.get("release_date") or r.get("first_air_date") or "")[:4],
+                "poster": f"https://image.tmdb.org/t/p/w200{r.get('poster_path')}" if r.get("poster_path") else "",
+                "vote_average": r.get("vote_average", 0),
+            }
+            for r in results
+        ],
+    }
+
+
+# ════════════════════════════════════════════════════════════════════
+# REQUESTS — 求片系统
+# ════════════════════════════════════════════════════════════════════
+
+
+@router.post("/api/requests/create")
+async def create_request(
+    token: str = Query(...),
+    tmdb_id: int = Query(...),
+    media_type: str = Query(...),
+    title: str = Query(...),
+    year: str = Query(""),
+    poster_url: str = Query(""),
+    overview: str = Query(""),
+    db: AsyncSession = Depends(get_session),
+):
+    """Submit a new media request."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+
+    # Check for duplicate
+    existing = await db.execute(
+        select(MediaRequest).where(
+            MediaRequest.tmdb_id == tmdb_id,
+            MediaRequest.status.in_(["pending", "approved"]),
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"error": "该影片已有待处理的求片"}
+
+    req = MediaRequest(
+        user_id=decoded["user_id"],
+        tmdb_id=tmdb_id,
+        media_type=media_type,
+        title=title,
+        year=year,
+        poster_url=poster_url,
+        overview=overview,
+    )
+    db.add(req)
+    await db.commit()
+    await db.refresh(req)
+
+    return {"ok": True, "request": {"id": req.id, "status": req.status}}
+
+
+@router.post("/api/requests/vote")
+async def vote_request(
+    token: str = Query(...),
+    request_id: int = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Upvote a media request (one vote per user per request)."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+
+    # Check if already voted
+    existing = await db.execute(
+        select(RequestVote).where(
+            RequestVote.request_id == request_id,
+            RequestVote.user_id == decoded["user_id"],
+        )
+    )
+    if existing.scalar_one_or_none():
+        return {"error": "你已经投过票了"}
+
+    req = (await db.execute(select(MediaRequest).where(MediaRequest.id == request_id))).scalar_one_or_none()
+    if not req:
+        return {"error": "求片不存在"}
+
+    vote = RequestVote(request_id=request_id, user_id=decoded["user_id"])
+    req.vote_count = (req.vote_count or 0) + 1
+    db.add(vote)
+    await db.commit()
+
+    return {"ok": True, "vote_count": req.vote_count}
+
+
+@router.get("/api/requests/list")
+async def list_requests(
+    token: str = Query(...),
+    status: str = Query(""),
+    page: int = Query(1),
+    limit: int = Query(20),
+    db: AsyncSession = Depends(get_session),
+):
+    """List media requests. Admin sees all, users see their own."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+
+    user = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    is_admin = user and user.role == "admin"
+
+    query = select(MediaRequest)
+    if status and status in ("pending", "approved", "rejected", "downloaded"):
+        query = query.where(MediaRequest.status == status)
+    if not is_admin:
+        query = query.where(MediaRequest.user_id == decoded["user_id"])
+    query = query.order_by(MediaRequest.created_at.desc()).offset((page - 1) * limit).limit(limit)
+
+    result = await db.execute(query)
+    requests = result.scalars().all()
+
+    # Get voter info for admin
+    voters = {}
+    if is_admin and requests:
+        rids = [r.id for r in requests]
+        vr = await db.execute(select(RequestVote).where(RequestVote.request_id.in_(rids)))
+        for v in vr.scalars().all():
+            voters.setdefault(v.request_id, []).append(v.user_id)
+
+    return {
+        "requests": [
+            {
+                "id": r.id,
+                "user_id": r.user_id,
+                "tmdb_id": r.tmdb_id,
+                "media_type": r.media_type,
+                "title": r.title,
+                "year": r.year,
+                "poster_url": r.poster_url,
+                "overview": r.overview,
+                "status": r.status,
+                "admin_note": r.admin_note,
+                "vote_count": r.vote_count,
+                "voter_ids": voters.get(r.id, []),
+                "created_at": r.created_at.isoformat() if r.created_at else "",
+            }
+            for r in requests
+        ],
+        "total": len(requests),
+    }
+
+
+@router.post("/api/requests/approve/{request_id}")
+async def approve_request(
+    request_id: int,
+    token: str = Query(...),
+    note: str = Query(""),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: approve a media request."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    user = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not user or user.role != "admin":
+        return {"error": "无权操作"}
+
+    req = (await db.execute(select(MediaRequest).where(MediaRequest.id == request_id))).scalar_one_or_none()
+    if not req:
+        return {"error": "求片不存在"}
+
+    req.status = "approved"
+    if note:
+        req.admin_note = note
+    req.updated_at = datetime.utcnow()
+    await db.commit()
+
+    return {"ok": True, "status": "approved"}
+
+
+@router.post("/api/requests/reject/{request_id}")
+async def reject_request(
+    request_id: int,
+    token: str = Query(...),
+    note: str = Query(""),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: reject a media request."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    user = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not user or user.role != "admin":
+        return {"error": "无权操作"}
+
+    req = (await db.execute(select(MediaRequest).where(MediaRequest.id == request_id))).scalar_one_or_none()
+    if not req:
+        return {"error": "求片不存在"}
+
+    req.status = "rejected"
+    if note:
+        req.admin_note = note
+    req.updated_at = datetime.utcnow()
+    await db.commit()
+
+    return {"ok": True, "status": "rejected"}
+
+
+@router.post("/api/requests/downloaded/{request_id}")
+async def mark_downloaded(
+    request_id: int,
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: mark a request as downloaded."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    user = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not user or user.role != "admin":
+        return {"error": "无权操作"}
+
+    req = (await db.execute(select(MediaRequest).where(MediaRequest.id == request_id))).scalar_one_or_none()
+    if not req:
+        return {"error": "求片不存在"}
+
+    req.status = "downloaded"
+    req.updated_at = datetime.utcnow()
+    await db.commit()
+
+    return {"ok": True, "status": "downloaded"}

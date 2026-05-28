@@ -1,20 +1,17 @@
 import { useState, useEffect } from 'react'
 import { apiGet } from '../api/client'
 import { Sidebar, TabBar } from '../components/Layout'
-import Dashboard from './AdminPanel'
+import { Dashboard, Checkin, Settings, Placeholder } from './AdminPanel'
+import MediaDiscovery from './MediaDiscovery'
+import { MyRequests } from './Requests'
 import { Spinner } from './Setup'
 
-// Re-export from AdminPanel's section components
-import AdminPanelModule from './AdminPanel'
-
 export default function UserPanel() {
-  const [page, setPage] = useState('dashboard')
+  const [page, setPage] = useState('discovery')
   const [user, setUser] = useState<any>(null)
-  const [connected, setConnected] = useState(false)
 
   useEffect(() => {
     try { setUser(JSON.parse(localStorage.getItem('ebu') || '{}')) } catch {}
-    apiGet('/api/config/status').then(r => { if (r.connected) setConnected(true) })
   }, [])
 
   return (
@@ -22,8 +19,12 @@ export default function UserPanel() {
       <Sidebar currentPage={page} onNavigate={setPage} />
       <main className="flex-1 min-w-0 overflow-y-auto h-screen p-5 max-md:p-3 max-md:pb-20">
         <div className="page-enter">
-          <h1 className="text-2xl font-bold">用户面板</h1>
-          <p className="text-sm text-[rgba(255,255,255,0.5)] mt-2">Emby Monitor · 用户端</p>
+          {page === 'discovery' && <MediaDiscovery />}
+          {page === 'my-requests' && <MyRequests />}
+          {page === 'dashboard' && <Dashboard user={user} />}
+          {page === 'checkin' && <Checkin user={user} />}
+          {page === 'settings' && <Settings user={user} isAdmin={false} />}
+          {!['discovery','my-requests','dashboard','checkin','settings'].includes(page) && <Placeholder name={page} />}
         </div>
       </main>
       <TabBar currentPage={page} onNavigate={setPage} />

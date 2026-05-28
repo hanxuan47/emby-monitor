@@ -4,10 +4,12 @@ import { apiGet, apiPost } from '../api/client'
 import { useToast } from '../components/Toast'
 import { Spinner } from './Setup'
 import { Sidebar, TabBar } from '../components/Layout'
+import MediaDiscovery from './MediaDiscovery'
+import { MyRequests, AdminRequests } from './Requests'
 
 // ─── Page Components ─────────────────────────────────────────
 
-function Dashboard({ user }: { user: any }) {
+export function Dashboard({ user }: { user: any }) {
   const [data, setData] = useState<any>(null)
   useEffect(() => {
     apiGet('/api/dashboard/summary').then(setData).catch(() => {})
@@ -35,7 +37,7 @@ function Dashboard({ user }: { user: any }) {
   )
 }
 
-function Checkin({ user }: { user: any }) {
+export function Checkin({ user }: { user: any }) {
   const [status, setStatus] = useState<any>(null)
   const load = () => apiGet('/api/checkin/status?token=' + localStorage.getItem('ebt')).then(setStatus)
   useEffect(() => { load() }, [])
@@ -66,15 +68,29 @@ function Checkin({ user }: { user: any }) {
   )
 }
 
-function Settings({ user, isAdmin }: { user: any; isAdmin: boolean }) {
+export function Settings({ user, isAdmin }: { user: any; isAdmin: boolean }) {
   const { toast } = useToast()
   const [mc, setMc] = useState<any>(null)
   const [regStatus, setRegStatus] = useState<any>(null)
+  const [tmdbKey, setTmdbKey] = useState('')
   const load = () => {
     apiGet('/api/config/masked').then(setMc)
     if (isAdmin) apiGet('/api/auth/register-status').then(setRegStatus)
+    // Check TMDB config
+    apiGet('/api/auth/register-status').then(() => {
+      const stored = localStorage.getItem('tmdb_key') || ''
+      setTmdbKey(stored)
+    })
   }
   useEffect(() => { load() }, [])
+
+  async function saveTmdb() {
+    const key = tmdbKey.trim()
+    if (!key) { toast('请输入TMDB API Key', 'error'); return }
+    const r = await apiPost('/api/config/tmdb', { token: localStorage.getItem('ebt') || '', api_key: key })
+    if (r.ok) { localStorage.setItem('tmdb_key', key); toast('TMDB 配置已保存') }
+    else toast(r.error || '保存失败', 'error')
+  }
 
   async function saveConfig() {
     const host = (document.getElementById('cfgH') as HTMLInputElement)?.value
@@ -117,6 +133,18 @@ function Settings({ user, isAdmin }: { user: any; isAdmin: boolean }) {
           <button className="glass-btn glass-btn-primary w-full mt-4" onClick={saveConfig}>保存连接</button>
         </div>
       )}
+      {isAdmin && (
+        <div className="glass-card max-w-[480px]">
+          <div className="section-title font-semibold mb-3">🎬 TMDB 配置（影视搜索用）</div>
+          <div className="space-y-3">
+            <input className="glass-input" placeholder="TMDB API Key (v3 auth)" value={tmdbKey} onChange={e => setTmdbKey(e.target.value)} />
+            <div className="text-[.65rem] text-[rgba(255,255,255,0.3)]">
+              在 <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener noreferrer" className="text-[#60a5fa]">TMDB API 设置</a> 获取
+            </div>
+          </div>
+          <button className="glass-btn glass-btn-primary w-full mt-4" onClick={saveTmdb}>保存 TMDB Key</button>
+        </div>
+      )}
       {isAdmin && regStatus && (
         <div className="glass-card max-w-[480px]">
           <div className="section-title font-semibold mb-3">👥 用户注册</div>
@@ -140,7 +168,7 @@ function Settings({ user, isAdmin }: { user: any; isAdmin: boolean }) {
   )
 }
 
-function Placeholder({ name }: { name: string }) {
+export function Placeholder({ name }: { name: string }) {
   return (
     <div>
       <h1 className="text-xl font-bold tracking-tight mb-4">{name}</h1>
@@ -161,6 +189,8 @@ export default function AdminPanel() {
 
   const pages: Record<string, React.ReactNode> = {
     dashboard: <Dashboard user={user} />,
+    'discovery': <MediaDiscovery />,
+    'my-requests': <MyRequests />,
     checkin: <Checkin user={user} />,
     streams: <Placeholder name="实时流" />,
     sessions: <Placeholder name="活跃会话" />,
@@ -172,6 +202,7 @@ export default function AdminPanel() {
     library: <Placeholder name="媒体库" />,
     codec: <Placeholder name="编码分析" />,
     tickets: <Placeholder name="工单" />,
+    'admin-requests': <AdminRequests />,
     notifications: <Placeholder name="通知" />,
     settings: <Settings user={user} isAdmin={true} />,
   }
