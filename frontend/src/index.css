@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Glassmorphism utilities */
+@layer components {
+  .glass-card {
+    @apply bg-[rgba(18,21,31,0.7)] backdrop-blur-2xl border border-[rgba(255,255,255,0.07)] rounded-[18px] p-5 mb-3 transition-all duration-200;
+  }
+  .glass-card:hover {
+    border-color: rgba(255,255,255,0.12);
+    transform: translateY(-1px);
+  }
+  .glass-input {
+    @apply bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.07)] rounded-xl px-4 py-[.7rem] text-[#f0f2f5] text-sm outline-none w-full transition-all;
+  }
+  .glass-input:focus {
+    border-color: #3b82f6;
+    background: rgba(59,130,246,0.08);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+  }
+  .glass-btn {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-[.6rem] rounded-xl text-sm font-medium border-none cursor-pointer transition-all duration-200 backdrop-blur-md;
+  }
+  .glass-btn:active { transform: scale(.96); }
+  .glass-btn-primary {
+    @apply text-white;
+    background: linear-gradient(135deg, rgba(59,130,246,0.85), rgba(139,92,246,0.85));
+    box-shadow: 0 4px 15px rgba(59,130,246,0.25);
+  }
+  .glass-btn-primary:hover {
+    box-shadow: 0 6px 25px rgba(59,130,246,0.35);
+    transform: translateY(-1px);
+  }
+  .glass-btn-secondary {
+    @apply bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.07)] text-[#f0f2f5];
+  }
+  .glass-btn-secondary:hover {
+    background: rgba(255,255,255,0.10);
+    border-color: rgba(255,255,255,0.12);
+  }
+  .glass-btn-danger {
+    @apply text-white;
+    background: linear-gradient(135deg, rgba(220,38,38,0.8), rgba(185,28,28,0.8));
+    box-shadow: 0 4px 15px rgba(220,38,38,0.2);
+  }
+  .glass-badge {
+    @apply inline-flex items-center px-2 py-[.1rem] rounded-full text-[.7rem] font-medium gap-1;
+  }
+  .glass-badge-green { @apply bg-[rgba(52,211,153,0.12)] text-[#34d399] border border-[rgba(52,211,153,0.2)]; }
+  .glass-badge-blue { @apply bg-[rgba(96,165,250,0.12)] text-[#60a5fa] border border-[rgba(96,165,250,0.2)]; }
+  .glass-badge-yellow { @apply bg-[rgba(251,191,36,0.12)] text-[#fbbf24] border border-[rgba(251,191,36,0.2)]; }
+  .glass-badge-red { @apply bg-[rgba(248,113,113,0.12)] text-[#f87171] border border-[rgba(248,113,113,0.2)]; }
+  .glass-badge-purple { @apply bg-[rgba(167,139,250,0.12)] text-[#a78bfa] border border-[rgba(167,139,250,0.2)]; }
+  .glass-table { @apply w-full border-collapse text-sm; }
+  .glass-table th { @apply text-left px-3 py-[.65rem] text-[rgba(255,255,255,0.3)] font-medium text-[.75rem] uppercase tracking-wider border-b border-[rgba(255,255,255,0.07)]; }
+  .glass-table td { @apply px-3 py-[.6rem] border-b border-[rgba(255,255,255,0.03)]; }
+  .stat-card {
+    @apply bg-[rgba(18,21,31,0.65)] backdrop-blur-2xl border border-[rgba(255,255,255,0.07)] rounded-[18px] p-4 transition-all;
+  }
+  .stat-card:hover { border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }
+  .stat-value { @apply text-[1.75rem] font-bold tracking-tight leading-tight; }
+  .stat-label { @apply text-[.75rem] text-[rgba(255,255,255,0.5)] mt-[.15rem] font-medium; }
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-[.55rem] mx-1 rounded-xl cursor-pointer transition-all text-[rgba(255,255,255,0.5)] text-sm font-medium;
+  }
+  .sidebar-link:hover { @apply bg-[rgba(255,255,255,0.04)] text-[#f0f2f5]; }
+  .sidebar-link.active { @apply bg-[rgba(59,130,246,0.10)] text-[#60a5fa]; }
+  .pulse-dot { @apply w-[7px] h-[7px] rounded-full inline-block relative; }
+  .pulse-dot.green { background: #34d399; }
+  .pulse-dot.green::after {
+    content: ''; position: absolute; inset: -2px; border-radius: 50%;
+    border: 2px solid rgba(52,211,153,0.3); animation: pulse-ring 2s infinite;
+  }
+  .pulse-dot.red { background: #f87171; }
+  @keyframes pulse-ring { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:0} }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  .page-enter { animation: fadeIn .3s ease; }
+}

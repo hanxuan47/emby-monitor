@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS backend
 
 WORKDIR /app
 
@@ -6,7 +6,24 @@ COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ /app/backend/
-COPY frontend/ /app/frontend/
+
+# ── Frontend build stage ─────────────────────────────────────────
+FROM node:20-alpine AS frontend
+
+WORKDIR /build
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm ci
+
+COPY frontend/ .
+RUN npx vite build
+
+# ── Final image ──────────────────────────────────────────────────
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY --from=backend /app/backend/ /app/backend/
+COPY --from=frontend /build/dist/ /app/frontend/dist/
 
 RUN mkdir -p /app/data
 

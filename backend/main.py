@@ -92,24 +92,25 @@ app.add_middleware(
 app.include_router(feature_router)
 
 
-# ── Serve static frontend ───────────────────────────────────────────
+# ── Serve SPA frontend (React build) ─────────────────────────────────
 
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 
-
-@app.get("/")
-async def serve_login():
-    return FileResponse(os.path.join(FRONTEND_DIR, "login.html"))
+SPA_PATHS = {"/", "/setup", "/admin", "/user"}
 
 
-@app.get("/user")
-async def serve_user():
-    return FileResponse(os.path.join(FRONTEND_DIR, "user.html"))
+@app.get("/assets/{file_path:path}")
+async def serve_assets(file_path: str):
+    return FileResponse(os.path.join(FRONTEND_DIR, "assets", file_path))
 
 
-@app.get("/admin")
-async def serve_admin():
-    return FileResponse(os.path.join(FRONTEND_DIR, "admin.html"))
+@app.get("/{full_path:path}")
+async def serve_spa(full_path: str):
+    # API routes are handled by other endpoints
+    if full_path.startswith("api/") or full_path.startswith("ws"):
+        return {"error": "Not found"}
+    # Serve index.html for all frontend routes (SPA)
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 
 # ── Config endpoints ────────────────────────────────────────────────
