@@ -289,13 +289,23 @@ function showPage(name){
   if(map[name])map[name]()
 }
 
-async function initApp(){sc(false);try{const r=await apiG('/api/config/status');if(r.connected){sc(true,r.name);lD();cws()}else sc(false)}catch(e){sc(false)}lCs()}
+async function initApp(){sc(false);try{const r=await apiG('/api/config/status');if(r.connected){sc(true,r.name);lD();cws()}else{sc(false);showOnboarding()}}catch(e){sc(false);showOnboarding()}lCs()}
+function showOnboarding(){document.getElementById('dashContent').innerHTML=`
+<div class="flex flex-col items-center justify-center py-20 text-center" style="max-width:400px;margin:auto">
+  <svg class="w-16 h-16 mb-4" style="color:var(--text3);opacity:.4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+  <h2 class="text-lg font-semibold mb-2">欢迎使用 Emby Monitor 🎉</h2>
+  <p class="text-sm mb-6" style="color:var(--text2)">首次使用需要先配置 Emby 服务器连接</p>
+  <button class="glass-btn glass-btn-primary py-3 px-6 text-base" onclick="showPage('settings')">
+    ⚙️ 去设置
+  </button>
+  <p class="text-xs mt-4" style="color:var(--text3)">配置后即可查看实时流、媒体库、用户活动等</p>
+</div>`}
 function cws(){if(ws&&ws.readyState===WebSocket.OPEN)return;const p=location.protocol==='https:'?'wss:':'ws:';ws=new WebSocket(p+'//'+location.host+'/ws');ws.onopen=()=>{if(pi)clearInterval(pi);pi=setInterval(()=>{ws.send(JSON.stringify({action:'ping'}))},5000)};ws.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.type==='pong')lDQ()}catch(e){}};ws.onclose=()=>{if(pi)clearInterval(pi);setTimeout(cws,3000)}}
 
 // DASHBOARD
 async function lD(){document.getElementById('dashContent').innerHTML=`<div class="flex justify-center py-20"><div class="glass-spinner"></div></div>`;await lDQ()}
 async function lDQ(){try{
-const s=await apiG('/api/dashboard/summary');if(s.error)return;
+const s=await apiG('/api/dashboard/summary');if(s.error){showOnboarding();return;}
 const ac=await apiG('/api/streams/active');const sts=ac.streams||[];
 const hi=await apiG('/api/streams/history?limit=10');const h=hi.history||[];
 const ua=await apiG('/api/users/activity?days=7');
