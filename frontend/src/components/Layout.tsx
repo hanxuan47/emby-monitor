@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { clearAuth, getUser, isAdmin } from '../api/auth'
+import { apiGet } from '../api/client'
 import { Logo } from '../pages/Setup'
 import type { User } from '../api/auth'
 
@@ -89,10 +90,9 @@ export function Sidebar({ currentPage, onNavigate }: { currentPage: string; onNa
         </div>
       </div>
 
-      <div id="connStatus" className="flex items-center gap-2 px-4 py-2 text-xs text-[rgba(255,255,255,0.3)]">
-        <span className="pulse-dot red" />
-        <span>未连接</span>
-      </div>
+      {/* ── iOS 毛玻璃连接状态 ── */}
+      <ConnStatus />
+
       <svg style={{ position: 'absolute', width: 0, height: 0 }}>
         <defs>
           <linearGradient id="lg" x1="2" y1="2" x2="22" y2="22">
@@ -138,6 +138,130 @@ export function TabBar({ currentPage, onNavigate }: { currentPage: string; onNav
           <span className="text-[.6rem] font-medium">{t.label}</span>
         </button>
       ))}
+    </div>
+  )
+}
+
+// ─── iOS 玻璃滑动状态栏 ────────────────────────────────────────
+
+export function ConnStatus() {
+  const [open, setOpen] = useState(false)
+  const [status, setStatus] = useState<any>({ connected: false })
+  const panelRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    apiGet('/api/config/status').then(r => {
+      if (r && r.connected !== undefined) setStatus(r)
+    }).catch(() => {})
+  }, [])
+
+  // Click outside to close
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    setTimeout(() => document.addEventListener('click', handler), 0)
+    return () => document.removeEventListener('click', handler)
+  }, [open])
+
+  // iOS-style 回弹动画 keyframes
+  const slideStyle = open ? {
+    maxHeight: '280px',
+    opacity: 1,
+    transform: 'translateY(0) scale(1)',
+  } : {
+    maxHeight: '0px',
+    opacity: 0,
+    transform: 'translateY(12px) scale(0.95)',
+    pointerEvents: 'none' as const,
+  }
+
+  const connected = status.connected
+  const dotColor = connected ? 'bg-green-400' : 'bg-red-400'
+  const dotPulse = connected ? 'animate-pulse' : ''
+  const label = connected ? '已连接' : '未连接'
+  const name = status.name || 'Emby'
+  const ver = status.version || '-'
+  const users = status.online_users ?? '-'
+  const streams = status.active_streams ?? '-'
+
+  return (
+    <div ref={panelRef} className="relative" style={{ zIndex: 60 }}>
+      {/* ── 状态条（触发按钮） ── */}
+      <button
+        className="flex items-center gap-2 w-full px-4 py-2.5 text-xs border-t border-[rgba(255,255,255,0.06)] cursor-pointer transition-all duration-200 hover:bg-[rgba(255,255,255,0.03)] active:scale-[0.98]"
+        style={{ background: open ? 'rgba(255,255,255,0.04)' : 'transparent' }}
+        onClick={(e) => { e.stopPropagation(); setOpen(!open) }}
+      >
+        <span className={`relative flex h-2 w-2 ${dotPulse}`}>
+          <span className={`absolute inline-flex h-full w-full rounded-full ${dotColor} opacity-75`} />
+          <span className={`relative inline-flex h-2 w-2 rounded-full ${dotColor}`} />
+        </span>
+        <span className="flex-1 text-left text-[rgba(255,255,255,0.35)] font-medium tracking-wide">{label}</span>
+        <svg
+          className="w-3 h-3 text-[rgba(255,255,255,0.2)] transition-transform duration-300"
+          style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+        >
+          <path d="M19 9l-7 7-7-7" strokeLinecap="round" />
+        </svg>
+      </button>
+
+      {/* ── 滑动毛玻璃详情面板 ── */}
+      <div
+        className="overflow-hidden transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)]"
+        style={slideStyle}
+      >
+        <div className="mx-3 mb-3 p-3.5 rounded-2xl border border-[rgba(255,255,255,0.08)]"
+          style={{
+            background: 'rgba(18,21,31,0.75)',
+            backdropFilter: 'blur(30px)',
+            WebkitBackdropFilter: 'blur(30px)',
+          }}
+        >
+          {/* 标题行 */}
+          <div className="flex items-center gap-2 mb-3 pb-2.5 border-b border-[rgba(255,255,255,0.06)]">
+            <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.5)]' : 'bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.5)]'}`} />
+            <span className="text-xs font-semibold text-[rgba(255,255,255,0.6)]">{name}</span>
+            {connected && <span className="ml-auto text-[.6rem] text-green-400/60 font-medium">● 运行中</span>}
+          </div>
+
+          {/* 信息网格 */}
+          <div className="grid grid-cols-2 gap-2 text-[.65rem]">
+            <InfoRow label="状态" value={connected ? '🟢 在线' : '🔴 离线'} />
+            <InfoRow label="版本" value={ver} />
+            <InfoRow label="在线用户" value={String(users)} />
+            <InfoRow label="活跃流" value={String(streams)} />
+          </div>
+
+          {/* 连接按钮 */}
+          {!connected && (
+            <button
+              className="mt-3 w-full py-2 rounded-xl text-[.65rem] font-medium transition-all duration-200 active:scale-[0.97]"
+              style={{
+                background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2))',
+                border: '1px solid rgba(59,130,246,0.15)',
+                color: 'rgba(255,255,255,0.6)',
+              }}
+              onClick={(e) => { e.stopPropagation(); setOpen(false); /* navigate to settings */ }}
+            >
+              去设置连接
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between py-1 px-2 rounded-lg bg-[rgba(255,255,255,0.03)]">
+      <span className="text-[rgba(255,255,255,0.25)]">{label}</span>
+      <span className="font-medium text-[rgba(255,255,255,0.6)]">{value}</span>
     </div>
   )
 }

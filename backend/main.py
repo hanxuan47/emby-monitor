@@ -175,7 +175,19 @@ async def set_config(
 @app.get("/api/config/status")
 async def config_status():
     if emby and await emby.health():
-        return {"connected": True, "name": emby.server_name, "version": emby.server_version}
+        try:
+            sessions = await emby.get_sessions()
+            active = len(sessions) if sessions else 0
+            users = len(set(s.get("UserId") for s in sessions if s.get("UserId"))) if sessions else 0
+        except Exception:
+            active = 0; users = 0
+        return {
+            "connected": True,
+            "name": emby.server_name,
+            "version": emby.server_version,
+            "active_streams": active,
+            "online_users": users,
+        }
     return {"connected": False}
 
 
