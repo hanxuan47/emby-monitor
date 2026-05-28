@@ -1,8 +1,12 @@
 """Local encryption helpers for Emby Monitor.
 
-Uses Fernet (symmetric AES-128-CBC) for encrypting sensitive config values
-and PBKDF2-HMAC-SHA256 for password hashing. The encryption key is
-auto-generated on first run and stored at /app/data/.encryption_key.
+Uses Fernet-compatible AES-like encryption for sensitive config values
+and PBKDF2-HMAC-SHA256 for password hashing.
+
+KEY PRIORITY:
+  1. ENCRYPTION_KEY env var (recommended for Docker deployments)
+  2. /app/data/.encryption_key file (auto-generated, fallback)
+  3. ENCRYPTION_KEY_FILE env var (custom key file path)
 """
 
 from __future__ import annotations
@@ -14,26 +18,48 @@ import os
 import secrets
 from typing import Optional
 
-KEY_FILE = "/app/data/.encryption_key"
+ENV_KEY_NAME = "ENCRYPTION_KEY"
+DEFAULT_KEY_FILE = "/app/data/.encryption_key"
 
 
-# ── Fernet Encryption ──────────────────────────────────────────────
+def _get_key_file() -> str:
+    """Return the encryption key file path, respecting env override."""
+    return os.environ.get("ENCRYPTION_KEY_FILE", DEFAULT_KEY_FILE)
 
 
 def _ensure_key() -> bytes:
-    """Get or generate the Fernet-compatible encryption key."""
-    if os.path.exists(KEY_FILE):
-        with open(KEY_FILE, "rb") as f:
+    """Get or generate the encryption key.
+
+    Priority:
+    1. ENCRYPTION_KEY environment variable
+    2. Key file on disk (generate if missing)
+    """
+    # 1. Check env var
+    env_key = os.environ.get(ENV_KEY_NAME, "").strip()
+    if env_key:
+        try:
+            key = env_key.encode()
+            # Validate it's Fernet-compatible base64
+            decoded = base64.urlsafe_b64decode(key + b"==")  # padding tolerant
+            if len(decoded) == 32:
+                return base64.urlsafe_b64encode(decoded).rstrip(b"=") + b"="
+        except Exception:
+            pass
+
+    # 2. Check / use key file
+    key_file = _get_key_file()
+    if os.path.exists(key_file):
+        with open(key_file, "rb") as f:
             key = f.read().strip()
-        # Ensure key is valid base64 (Fernet key format)
-        if len(key) == 44 and key.count(b"=") <= 2:
+        if len(key) >= 32:
             return key
-    # Generate a new key
+
+    # 3. Generate new key file
     key = base64.urlsafe_b64encode(os.urandom(32))
-    os.makedirs(os.path.dirname(KEY_FILE), exist_ok=True)
-    with open(KEY_FILE, "wb") as f:
+    os.makedirs(os.path.dirname(key_file), exist_ok=True)
+    with open(key_file, "wb") as f:
         f.write(key)
-    os.chmod(KEY_FILE, 0o600)  # Only owner can read
+    os.chmod(key_file, 0o600)
     return key
 
 
