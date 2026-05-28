@@ -74,17 +74,35 @@ def decode_token(token: str) -> dict | None:
     return None
 
 
+async def hash_password(pw: str) -> str:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _hash_sync, pw)
+
+
+def _hash_sync(pw: str) -> str:
+    from .emby_crypto import hash_password as hp
+    return hp(pw)
+
+
+def verify_password(pw: str, hashed: str) -> bool:
+    from .emby_crypto import verify_password as vp
+    return vp(pw, hashed)
+
+
 def gen_code(length: int = 6) -> str:
     return "".join(random.choices(string.digits, k=length))
 
 
-def require_admin(user_id: int, db: AsyncSession) -> bool:
-    """Check if a panel user is admin. Runs inside a request."""
-    # We do actual DB check in endpoints that need it
-    return True  # stub — real check in endpoint
+def _notify_user_async(panel_user_id: int, title: str, content: str):
+    """Fire-and-forget TG notification. Never blocks the response."""
+    try:
+        from .tg_bot import send_notify_to_user
+        asyncio.ensure_future(send_notify_to_user(panel_user_id, title, content))
+    except Exception:
+        pass
 
 
-async def _send_email(to: str, subject: str, body: str, db: AsyncSession) -> str:
+async def _send_email(to: str, subject: str, body: str, db) -> str:
     """Send email via configured SMTP. Returns 'sent' or 'failed'."""
     try:
         result = await db.execute(
@@ -102,6 +120,11 @@ async def _send_email(to: str, subject: str, body: str, db: AsyncSession) -> str
         if not host:
             logger.warning(f"SMTP not configured, would send: {subject} to {to}")
             return "sent_logged"
+
+        # Decrypt password
+        from .emby_crypto import decrypt as crypto_decrypt
+        decrypted = crypto_decrypt(pwd)
+        pwd = decrypted if decrypted else pwd
 
         msg = MIMEText(body, "plain", "utf-8")
         msg["Subject"] = subject
@@ -817,6 +840,20 @@ async def reply_ticket(
         ticket.status = "open"
 
     await db.commit()
+
+    # ── Auto TG push: notify the other party ──────────────────
+    if user.role == "admin":
+        _notify_user_async(ticket.panel_user_id, f"工单回复 💬",
+            f"管理员回复了你的工单「<b>{ticket.subject}</b>」\n\n{content[:200]}")
+    else:
+        admin_result = await db.execute(
+            select(PanelUser).where(PanelUser.role == "admin").limit(1)
+        )
+        admin_user = admin_result.scalar_one_or_none()
+        if admin_user and admin_user.id != user.id:
+            _notify_user_async(admin_user.id, f"用户工单回复 💬",
+                f"<b>{user.username}</b> 回复了工单「<b>{ticket.subject}</b>」\n\n{content[:200]}")
+
     return {"ok": True}
 
 
@@ -1431,6 +1468,10 @@ async def approve_request(
     req.updated_at = datetime.utcnow()
     await db.commit()
 
+    # ── Auto TG push ──────────────────────────────────────────
+    _notify_user_async(req.user_id, "求片已通过 ✅",
+        f"<b>{req.title}</b> ({req.year or '?'}) 已通过审批，准备入库。")
+
     return {"ok": True, "status": "approved"}
 
 
@@ -1459,6 +1500,11 @@ async def reject_request(
     req.updated_at = datetime.utcnow()
     await db.commit()
 
+    # ── Auto TG push ──────────────────────────────────────────
+    note_text = f"原因: {note}" if note else ""
+    _notify_user_async(req.user_id, "求片未通过 ❌",
+        f"<b>{req.title}</b> ({req.year or '?'}) 已被驳回。{note_text}")
+
     return {"ok": True, "status": "rejected"}
 
 
@@ -1483,6 +1529,10 @@ async def mark_downloaded(
     req.status = "downloaded"
     req.updated_at = datetime.utcnow()
     await db.commit()
+
+    # ── Auto TG push ──────────────────────────────────────────
+    _notify_user_async(req.user_id, "求片已入库 📥",
+        f"<b>{req.title}</b> ({req.year or '?'}) 已入库，可以去看了！")
 
     return {"ok": True, "status": "downloaded"}
 
