@@ -1,6 +1,6 @@
 # Emby Monitor
 
-基于 **iOS 毛玻璃设计** 的全功能 Emby 影视管理面板。React + FastAPI 全栈，18 个功能模块，卡密注册系统，AI 智能分析，IP 用户地图，Telegram Bot 通知，全响应式设计。
+基于 **iOS 毛玻璃设计** 的全功能 Emby 影视管理面板。React + FastAPI 全栈，20+ 功能模块，卡密注册系统，AI 智能分析，IP 用户地图，服务器线路展示，公告 & Wiki 知识库，Telegram Bot 通知，全响应式设计。
 
 ---
 
@@ -16,6 +16,13 @@
 | 🆕 **最近更新** | 最近添加到 Emby 的媒体 |
 | 🎞️ **编码分析** | 视频/音频编码分布、转码率统计 |
 
+### 🌐 服务器线路 & 信息
+| 模块 | 说明 |
+|------|------|
+| 📡 **服务器线路** | 展示所有可用线路，标签（优化/直连/国内）、延迟、状态 |
+| 📢 **公告系统** | 管理员发布公告，用户折叠阅读 |
+| 📖 **Wiki 知识库** | 管理员编写文档，用户侧边栏目录 + 内容阅读 |
+
 ### 🤖 AI 智能分析
 | 模块 | 说明 |
 |------|------|
@@ -28,7 +35,7 @@
 | 模块 | 说明 |
 |------|------|
 | 👤 **用户活动** | 每日播放量统计、Top 10 排名 |
-| 🔧 **Emby 用户管理** | 创建/删除/启用/改密、登录码 |
+| 🔧 **Emby 用户管理** | 创建/删除/启用/改密（TG验证码 + 系统随机密码） |
 | ⭐ **影片评价** | 5 星评分 + 评论 |
 | 🎫 **工单系统** | 用户提交/管理员处理/分类/优先级 |
 
@@ -62,7 +69,7 @@
 | `/unbind` | 解绑 |
 | `/status` | 查看绑定状态 |
 
-**自动推送**：求片通过/驳回/入库、工单回复 → 自动推送到用户 TG。
+**自动推送**：求片通过/驳回/入库、工单回复、密码重置验证码 → 自动推送到用户 TG。
 
 ---
 
@@ -79,7 +86,7 @@
 
 ### 前置条件
 
-- Docker & Docker Compose
+- Docker & Docker Compose / 1Panel
 - 一个 Emby 服务器（含 API Key）
 - （可选）TMDB API Key — [免费申请](https://www.themoviedb.org/settings/api)
 - （可选）Telegram Bot Token — [@BotFather](https://t.me/BotFather) 创建
@@ -156,6 +163,54 @@ docker compose up -d
 
 6. 设置 → 开放用户注册
    → 生成卡密给用户使用
+
+7. 管理 → 线路管理
+   → 添加服务器线路 + 自定义标签（如：优化,直连,国内）
+   → 用户可在侧边栏「服务器线路」查看
+
+8. 管理 → 公告管理 / Wiki 管理
+   → 编写公告和文档
+   → 用户可在侧边栏查看
+```
+
+---
+
+## 🌐 服务器线路（管理端）
+
+管理员可添加多条 Emby 服务器线路，自定义标签，用户端统一展示。
+
+```
+管理员 → 线路管理
+├── 添加线路：名称 / 地址 / 类型 / 标签（逗号分隔）
+├── 标签示例：优化,直连,国内,海外,日本
+├── 编辑 / 删除线路
+├── 测速（单条 / 全部）
+└── 排序 / 启用/禁用
+
+用户 → 服务器线路
+├── 查看所有在线线路
+├── 标签、延迟、状态一目了然
+└── 点击「访问」直达线路地址
+```
+
+---
+
+## 📢 公告 & 📖 Wiki（管理端）
+
+公告和 Wiki 均由管理员编写，用户端只读展示。
+
+```
+管理员 → 公告管理
+├── 写公告（标题 + 内容）
+├── 编辑 / 删除
+├── 发布 / 下架
+└── 用户端折叠卡片阅读
+
+管理员 → Wiki 管理
+├── 新建页面（slug + 标题 + Markdown 内容）
+├── 编辑 / 删除
+├── 发布 / 草稿
+└── 用户端侧栏目录 + 内容区展示
 ```
 
 ---
@@ -212,6 +267,24 @@ docker compose up -d
 
 ---
 
+## 🔐 Emby 用户改密
+
+改密采用 **TG 验证码 + 系统随机密码** 机制，确保安全。
+
+```
+管理员 → Emby 用户 → 点击「🔐 TG 验证改密」
+├── 系统生成 6 位验证码 → 通过 TG Bot 发送给用户
+├── 用户告知管理员验证码
+├── 管理员输入验证码 → 确认
+├── 系统 secrets 模块生成 12 位随机密码
+├── 调用 Emby API 设置密码
+└── 页面展示新密码 → 一键复制
+```
+
+> ⚠️ 密码不可自定义，必须由系统生成。用户必须绑定 Telegram 才能使用改密功能。
+
+---
+
 ## 🔐 卡密系统
 
 注册必须填写卡密。管理员操作流程：
@@ -244,6 +317,7 @@ docker compose up -d
   ✅ 求片驳回 → 通知提交者（含原因）
   ✅ 求片入库 → 通知提交者
   ✅ 工单回复 → 通知对方
+  ✅ 密码重置验证码 → 发送 TG 验证码
   📢 TG 广播 → 管理员群发所有绑定用户
 ```
 
@@ -267,6 +341,7 @@ docker compose up -d
 - 🔐 **Token 双模式认证** — 支持 `Authorization: Bearer` Header（优先）+ 旧版 `?token=` Query 兼容
 - ⏳ **Token 过期机制** — 7 天自动过期，密钥派生自主加密密钥（非硬编码）
 - 🔑 **密码最短 8 位** — 仅 PBKDF2 哈希，移除 SHA256 回退，防彩虹表
+- 📱 **TG 验证改密** — Emby 用户改密需 TG 验证码确认，密码系统随机生成，不可自定义
 
 ### 加密密钥管理
 
@@ -293,7 +368,7 @@ services:
 
 ---
 
-## 🛠️ API 概览（共 50+ 端点）
+## 🛠️ API 概览（共 65+ 端点）
 
 | 模块 | 端点 |
 |------|------|
@@ -301,10 +376,12 @@ services:
 | 仪表盘 | dashboard/summary |
 | 实时流 | streams/active / streams/history |
 | 媒体库 | library/stats / recently-added / codec-breakdown |
-| 用户管理 | users/activity / users/manage\* / users/map |
+| 用户管理 | users/activity / users/manage\* / users/manage/create / users/manage/toggle / users/manage/policy / users/manage/password/send-code / users/manage/password/reset / users/map |
 | AI | ai/scan / ai/config / ai/settings / ai/logs |
 | 评价 | media/review / media/reviews / media/my-reviews |
-| 站点 | sites / sites/create / sites/test/{id} / sites/test-all |
+| 线路 | sites / sites/create / sites/update/{id} / sites/test/{id} / sites/test-all |
+| 公告 | announcements / announcements/all / announcements/create / announcements/{id} / announcements/{id}/toggle / announcements/{id} (DELETE) |
+| Wiki | wiki / wiki/all / wiki/{slug} / wiki/create / wiki/{id} / wiki/{id} (DELETE) |
 | 工单 | tickets / tickets/create / tickets/{id} / tickets/{id}/reply / tickets/{id}/status |
 | 签到 | checkin / checkin/status |
 | 通知 | notify/config / notify/send / notify/logs |
@@ -329,17 +406,23 @@ emby-monitor/
 │   ├── emby_crypto.py            # PBKDF2-XOR 加密 + HMAC 签名
 │   ├── ai_engine.py              # AI 规则引擎 + LLM 增强
 │   ├── llm_client.py             # LLM API 客户端（OpenAI / DeepSeek / Moonshot）
-│   ├── models.py                 # 16+ 个 SQLAlchemy 模型
+│   ├── models.py                 # 20+ 个 SQLAlchemy 模型（含自动迁移）
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx               # 路由定义（18+ 页面）
+│   │   ├── App.tsx               # 路由定义
 │   │   ├── api/                  # API 客户端 + auth
 │   │   ├── components/           # Layout / Toast / 通用组件
-│   │   └── pages/                # 13+ 页面组件
+│   │   └── pages/                # 18 个页面组件
+│   │       ├── ServerRoutes.tsx  # 🌐 用户端线路展示
+│   │       ├── Announcements.tsx # 📢 用户端公告
+│   │       ├── WikiViewer.tsx    # 📖 用户端 Wiki
+│   │       ├── AdminSites.tsx    # 📡 管理端线路管理
+│   │       ├── AdminAnnouncements.tsx  # 📢 管理端公告管理
+│   │       ├── AdminWiki.tsx     # 📖 管理端 Wiki 管理
+│   │       ├── EmbyUserManage.tsx # 🔧 Emby 用户管理（TG改密）
 │   │       ├── UserMap.tsx       # 📍 高德用户地图
 │   │       ├── AiPanel.tsx       # 🤖 AI 扫描面板
-│   │       ├── AiLogPanel.tsx    # 📋 AI 审计日志
 │   │       └── ...
 │   └── package.json
 └── data/                         # SQLite + 密钥（自动创建，需备份）
