@@ -127,9 +127,17 @@ async def register(
     password: str = Query(...),
     db: AsyncSession = Depends(get_session),
 ):
-    """Register a new panel user."""
+    """Register a new panel user. First user auto-becomes admin."""
     if len(password) < 4:
         return {"error": "密码至少4位"}
+
+    # Check if registration is open
+    cfg_result = await db.execute(
+        select(PanelConfig).where(PanelConfig.key == "registration_enabled")
+    )
+    cfg = cfg_result.scalar_one_or_none()
+    if cfg and cfg.value == "0":
+        return {"error": "注册已关闭"}
 
     existing = await db.execute(
         select(PanelUser).where(
@@ -139,10 +147,17 @@ async def register(
     if existing.scalar_one_or_none():
         return {"error": "用户名或邮箱已存在"}
 
+    # First user becomes admin automatically
+    admin_exists = await db.execute(
+        select(PanelUser).where(PanelUser.role == "admin").limit(1)
+    )
+    is_first = admin_exists.scalar_one_or_none() is None
+
     user = PanelUser(
         username=username,
         email=email,
         password_hash=hash_password(password),
+        role="admin" if is_first else "user",
     )
     db.add(user)
     await db.commit()
@@ -150,7 +165,8 @@ async def register(
 
     return {
         "ok": True,
-        "user": {"id": user.id, "username": user.username, "email": user.email},
+        "is_admin": is_first,
+        "user": {"id": user.id, "username": user.username, "email": user.email, "role": user.role},
     }
 
 
@@ -198,6 +214,51 @@ async def login(
             "emby_user_id": uemby_id,
         },
     }
+
+
+# ── Registration status & admin toggle ──────────────────────────────
+
+
+@router.get("/api/auth/register-status")
+async def register_status(db: AsyncSession = Depends(get_session)):
+    """Check if registration is open."""
+    result = await db.execute(
+        select(PanelConfig).where(PanelConfig.key == "registration_enabled")
+    )
+    cfg = result.scalar_one_or_none()
+    enabled = cfg is None or cfg.value != "0"
+
+    admin_exists = await db.execute(
+        select(PanelUser).where(PanelUser.role == "admin").limit(1)
+    )
+    return {"enabled": enabled, "has_admin": admin_exists.scalar_one_or_none() is not None}
+
+
+@router.post("/api/admin/registration")
+async def toggle_registration(
+    token: str = Query(...),
+    enabled: str = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin-only: toggle registration on/off."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    user = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not user or user.role != "admin":
+        return {"error": "无权操作"}
+
+    result = await db.execute(
+        select(PanelConfig).where(PanelConfig.key == "registration_enabled")
+    )
+    cfg = result.scalar_one_or_none()
+    if cfg:
+        cfg.value = "1" if enabled == "1" else "0"
+    else:
+        db.add(PanelConfig(key="registration_enabled", value="1" if enabled == "1" else "0"))
+    await db.commit()
+
+    return {"ok": True, "enabled": enabled == "1"}
 
 
 @router.get("/api/auth/me")

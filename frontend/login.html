@@ -200,7 +200,9 @@ function apiP(p,params){const qs=new URLSearchParams(params).toString();return f
 function showRegister(){sr('registerTab')}
 function showLogin(){sr('loginTab')}
 function showForgot(){sr('forgotTab')}
-async function doRegister(){const u=document.getElementById('regUser').value.trim(),e=document.getElementById('regEmail').value.trim(),p=document.getElementById('regPass').value;if(!u||!e||!p)return st('请填写完整','error');const r=await apiP('/api/auth/register',{username:u,email:e,password:p});r.ok?(st('注册成功'),showLogin()):st(r.error||'注册失败','error')}
+async function doRegister(){const u=document.getElementById('regUser').value.trim(),e=document.getElementById('regEmail').value.trim(),p=document.getElementById('regPass').value;if(!u||!e||!p)return st('请填写完整','error');const r=await apiP('/api/auth/register',{username:u,email:e,password:p});if(r.ok){st(r.is_admin?'🎉 你是管理员！请登录':'注册成功');showLogin()}else st(r.error||'注册失败','error')}
+
+async function checkRegistration(){try{const r=await apiG('/api/auth/register-status');if(!r.enabled){const el=document.getElementById('registerLink');if(el)el.style.display='none';const tab=document.getElementById('registerTab');if(tab)tab.innerHTML='<div class=\"text-center py-6\" style=\"color:var(--text2);font-size:.85rem\">🔒 注册已关闭</div>'}}catch(e){}}
 async function doLogin(){const u=document.getElementById('loginUser').value.trim(),p=document.getElementById('loginPass').value;if(!u||!p)return st('请输入用户名和密码','error');const r=await apiP('/api/auth/login',{username:u,password:p});if(r.ok){localStorage.setItem(TK,r.token);localStorage.setItem(UK,JSON.stringify(r.user));window.location.href=r.user.role==='admin'?'/admin':'/user'}else st(r.error||'登录失败','error')}
 function doLogout(){localStorage.removeItem(TK);localStorage.removeItem(UK);window.location.href='/'}
 async function doForgot(){const e=document.getElementById('forgotEmail').value.trim();if(!e)return st('请输入邮箱','error');const r=await apiP('/api/auth/forgot-password',{email:e});st('重置码已发送');document.getElementById('resetFields').style.display=''}
@@ -214,6 +216,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       window.location.href=u.role==='admin'?'/admin':'/user';
     }catch(e){}
   }
+  checkRegistration();
 });
 </script>
 </body>
