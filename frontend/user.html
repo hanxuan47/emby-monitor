@@ -148,7 +148,31 @@ canvas{max-height:230px;max-width:100%}
 <!-- Toast -->
 <div id='toast' class='glass-toast'></div>
 
-<!-- Login page is at /login.html -->
+<div id="userLoginOverlay" class="fixed inset-0 z-[999] flex items-center justify-center" style="display:none">
+  <div class="login-bg" style="position:fixed;inset:0;z-index:-1;background:radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.08) 0%, transparent 60%),radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.06) 0%, transparent 50%),var(--bg)"></div>
+  <div class="w-full max-w-sm px-6 py-8">
+    <div class="text-center mb-8">
+      <svg class="w-14 h-14 mx-auto mb-3" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="url(#lg)" stroke-width="1.8"/></svg>
+      <h1 class="text-2xl font-bold tracking-tight">Emby <span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Monitor</span></h1>
+      <p class="text-sm mt-1" style="color:var(--text2)">用户端</p>
+    </div>
+    <div class="glass-card-static" style="padding:1.5rem">
+      <div id="uLoginTab" class="tab-pane space-y-3.5">
+        <input id="uLoginUser" class="glass-input" placeholder="用户名" autocomplete="username">
+        <input id="uLoginPass" type="password" class="glass-input" placeholder="密码" autocomplete="current-password">
+        <button class="glass-btn glass-btn-primary w-full py-3" onclick="doULogin()">登录</button>
+        <div class="text-center text-xs" style="color:var(--text2)"><a href="#" onclick="switchUTab('uRegTab');return false" id="uRegLink" class="hover:text-white transition-colors">注册账号</a></div>
+      </div>
+      <div id="uRegTab" class="tab-pane space-y-3.5" style="display:none">
+        <input id="uRegUser" class="glass-input" placeholder="用户名" autocomplete="username">
+        <input id="uRegEmail" class="glass-input" placeholder="邮箱" autocomplete="email">
+        <input id="uRegPass" type="password" class="glass-input" placeholder="密码" autocomplete="new-password">
+        <button class="glass-btn glass-btn-primary w-full py-3" onclick="doUReg()">注册</button>
+        <div class="text-center text-xs" style="color:var(--text2)"><a href="#" onclick="switchUTab('uLoginTab');return false" class="hover:text-white transition-colors">已有账号？登录</a></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <svg style="position:absolute;width:0;height:0"><defs><linearGradient id="lg" x1="2" y1="2" x2="22" y2="22"><stop stop-color="#3b82f6"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs></svg>
 
@@ -350,14 +374,45 @@ async function lSg(){
 async function cEmb(){const h=document.getElementById('cfgH').value.trim(),k=document.getElementById('cfgK').value.trim(),n=document.getElementById('cfgN').value.trim()||'My Emby';if(!h||!k)return st('请填写地址和Key','error');const r=await apiP('/api/config',{host:h,api_key:k,name:n});r.ok?(st('已连接 '+r.server_name),sc(true,r.server_name),lD()):st(r.error||'连接失败','error')}
 async function uPf(){const u=document.getElementById('pEU').value.trim(),i=document.getElementById('pEI').value.trim();const r=await apiP('/api/auth/update-profile',{token,emby_username:u,emby_user_id:i});if(r.ok){user.emby_username=u;user.emby_user_id=i;localStorage.setItem(UK,JSON.stringify(user));st('已保存')}else st(r.error||'失败','error')}
 
+// ── User auth (embedded login/register) ──────────────────────────
+function switchUTab(id){document.querySelectorAll('#userLoginOverlay .tab-pane').forEach(e=>e.style.display='none');document.getElementById(id).style.display=''}
+async function doULogin(){
+  const u=document.getElementById('uLoginUser').value.trim(),p=document.getElementById('uLoginPass').value;
+  if(!u||!p)return st('请输入用户名和密码','error');
+  const r=await apiP('/api/auth/login',{username:u,password:p});
+  if(r.ok){
+    localStorage.setItem(TK,r.token);localStorage.setItem(UK,JSON.stringify(r.user));
+    document.getElementById('userLoginOverlay').style.display='none';
+    document.getElementById('app').style.display='flex';
+    initApp()
+  }else st(r.error||'登录失败','error');
+}
+async function doUReg(){
+  const u=document.getElementById('uRegUser').value.trim(),e=document.getElementById('uRegEmail').value.trim(),p=document.getElementById('uRegPass').value;
+  if(!u||!e||!p)return st('请填写完整','error');
+  const r=await apiP('/api/auth/register',{username:u,email:e,password:p});
+  if(r.ok){st('注册成功','success');switchUTab('uLoginTab')}
+  else st(r.error||'注册失败','error');
+}
+async function checkAuthState(){
+  try{
+    const rs=await apiG('/api/auth/register-status');
+    if(!rs.enabled)document.getElementById('uRegLink').style.display='none';
+  }catch(e){}
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
   const tok=localStorage.getItem(TK);
-  if(!tok){window.location.href='/';return}
   token=tok;
   try{user=JSON.parse(localStorage.getItem(UK)||'{}')}catch(e){}
-  document.getElementById('loginPage')?.remove();
-  document.getElementById('app').style.display='flex';
-  initApp()
+  if(tok){
+    document.getElementById('userLoginOverlay').style.display='none';
+    document.getElementById('app').style.display='flex';
+    initApp()
+  }else{
+    document.getElementById('userLoginOverlay').style.display='flex';
+    checkAuthState()
+  }
 });
 </script>
 </body>

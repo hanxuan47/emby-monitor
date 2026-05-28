@@ -3,149 +3,81 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Emby Monitor</title>
+<title>Emby Monitor · 管理登录</title>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
 :root {
   --bg: #0a0c12;
   --glass: rgba(255,255,255,0.06);
-  --glass2: rgba(255,255,255,0.10);
   --border: rgba(255,255,255,0.07);
-  --border2: rgba(255,255,255,0.12);
   --text: #f0f2f5;
   --text2: rgba(255,255,255,0.50);
-  --text3: rgba(255,255,255,0.30);
   --accent: #3b82f6;
   --safe-bottom: env(safe-area-inset-bottom,0px);
 }
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{font-family:-apple-system,'SF Pro Display','SF Pro Text','Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center}
 .glass-card-static{background:rgba(18,21,31,0.7);-webkit-backdrop-filter:blur(24px) saturate(1.3);backdrop-filter:blur(24px) saturate(1.3);border:1px solid var(--border);border-radius:18px;padding:1.5rem}
-.glass-input{background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:12px;padding:.7rem 1rem;color:var(--text);font-size:.9rem;outline:none;width:100%;transition:all .2s;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
-.glass-input:focus{border-color:var(--accent);background:rgba(59,130,246,0.08);box-shadow:0 0 0 3px rgba(59,130,246,0.15)}
-.glass-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.6rem 1.2rem;border-radius:12px;font-size:.875rem;font-weight:500;border:none;cursor:pointer;transition:all .2s cubic-bezier(.22,1,.36,1);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
-.glass-btn:active{transform:scale(.96)}
-.glass-btn-primary{background:linear-gradient(135deg,rgba(59,130,246,0.85),rgba(139,92,246,0.85));color:#fff;box-shadow:0 4px 15px rgba(59,130,246,0.25)}
-.glass-btn-primary:hover{box-shadow:0 6px 25px rgba(59,130,246,0.35);transform:translateY(-1px)}
-.glass-toast{position:fixed;bottom:calc(1.5rem + var(--safe-bottom));left:50%;transform:translateX(-50%) translateY(120px);z-index:9999;padding:.75rem 1.5rem;border-radius:14px;font-size:.875rem;font-weight:500;white-space:nowrap;opacity:0;transition:all .4s cubic-bezier(.22,1,.36,1);pointer-events:none}
+.glass-input{background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:12px;padding:.7rem 1rem;color:var(--text);font-size:.9rem;outline:none;width:100%}
+.glass-input:focus{border-color:var(--accent)}
+.glass-btn{display:inline-flex;align-items:center;justify-content:center;padding:.6rem 1.2rem;border-radius:12px;font-size:.875rem;font-weight:500;border:none;cursor:pointer;transition:all .2s}
+.glass-btn-primary{background:linear-gradient(135deg,rgba(59,130,246,0.85),rgba(139,92,246,0.85));color:#fff}
+.glass-toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(120px);z-index:9999;padding:.75rem 1.5rem;border-radius:14px;font-size:.875rem;font-weight:500;opacity:0;transition:all .4s;pointer-events:none}
 .glass-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-.glass-toast-success{background:rgba(6,78,59,0.85);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(5,150,105,0.3);color:#6ee7b7}
-.glass-toast-error{background:rgba(127,29,29,0.85);-webkit-backdrop-filter:blur(20px);backdrop-filter:blur(20px);border:1px solid rgba(220,38,38,0.3);color:#fca5a5}
+.glass-toast-success{background:rgba(6,78,59,0.85);color:#6ee7b7}
+.glass-toast-error{background:rgba(127,29,29,0.85);color:#fca5a5}
 .login-bg{position:fixed;inset:0;z-index:-1;background:radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.08) 0%, transparent 60%),radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.06) 0%, transparent 50%),var(--bg)}
 .glass-spinner{width:28px;height:28px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin:2rem auto}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
-
 <div id="toast" class="glass-toast"></div>
-
-<div id="pageRoot" class="fixed inset-0 z-[999] flex items-center justify-center">
-  <div class="login-bg"></div>
-  <div class="w-full max-w-sm px-6 py-8">
-    <div class="text-center mb-8">
-      <svg class="w-14 h-14 mx-auto mb-3" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="url(#lg)" stroke-width="1.8"/></svg>
-      <h1 class="text-2xl font-bold tracking-tight">Emby <span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Monitor</span></h1>
-      <p class="text-sm mt-1" style="color:var(--text2)" id="pageSubtitle">加载中...</p>
-    </div>
-    <div class="glass-card-static" id="formContainer">
-      <div id="loadingView" class="text-center py-6">
-        <div class="glass-spinner"></div>
-      </div>
-    </div>
+<div class="login-bg"></div>
+<div class="w-full max-w-sm px-6 py-8">
+  <div class="text-center mb-8">
+    <svg class="w-14 h-14 mx-auto mb-3" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="url(#lg)" stroke-width="1.8"/></svg>
+    <h1 class="text-2xl font-bold tracking-tight">Emby <span class="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Monitor</span></h1>
+    <p class="text-sm mt-1" style="color:var(--text2)" id="pageSubtitle">加载中...</p>
+  </div>
+  <div class="glass-card-static" id="formContainer">
+    <div id="loadingView" class="text-center py-6"><div class="glass-spinner"></div></div>
   </div>
 </div>
-
 <svg style="position:absolute;width:0;height:0"><defs><linearGradient id="lg" x1="2" y1="2" x2="22" y2="22"><stop stop-color="#3b82f6"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient></defs></svg>
-
 <script>
 const API='',TK='ebt',UK='ebu';
-
 function st(m,t){const e=document.getElementById('toast');e.textContent=m;e.className='glass-toast glass-toast-'+t+' show';setTimeout(()=>e.classList.remove('show'),2800)}
-function apiG(p){return fetch(API+p).then(r=>r.json())}
 function apiP(p,params){const qs=new URLSearchParams(params).toString();return fetch(API+p+'?'+qs,{method:'POST'}).then(r=>r.json())}
-
-function sr(id){document.querySelectorAll('.tab-pane').forEach(e=>e.style.display='none');document.getElementById(id).style.display=''}
-
-function showSetupForm(){
-  document.getElementById('pageSubtitle').textContent='首次使用 · 创建管理员';
-  document.getElementById('formContainer').innerHTML=`
-    <div class="space-y-3.5">
-      <input id="suUser" class="glass-input" placeholder="管理员用户名" autocomplete="username">
-      <input id="suEmail" class="glass-input" placeholder="邮箱" autocomplete="email">
-      <input id="suPass" type="password" class="glass-input" placeholder="密码" autocomplete="new-password">
-      <button class="glass-btn glass-btn-primary w-full py-3" onclick="doSetup()">🚀 初始化</button>
-    </div>`;
-}
-
-function showLoginForm(){
-  document.getElementById('pageSubtitle').textContent='影视管理面板';
-  document.getElementById('formContainer').innerHTML=`
-    <div id="loginTab" class="tab-pane space-y-3.5">
-      <input id="loginUser" class="glass-input" placeholder="用户名" autocomplete="username">
-      <input id="loginPass" type="password" class="glass-input" placeholder="密码" autocomplete="current-password">
-      <button class="glass-btn glass-btn-primary w-full py-3" onclick="doLogin()">登录</button>
-      <div class="text-center text-xs" style="color:var(--text2)"><a href="#" onclick="sr('registerTab');return false" id="regLink" class="hover:text-white transition-colors">注册账号</a></div>
-    </div>
-    <div id="registerTab" class="tab-pane space-y-3.5" style="display:none">
-      <input id="regUser" class="glass-input" placeholder="用户名" autocomplete="username">
-      <input id="regEmail" class="glass-input" placeholder="邮箱" autocomplete="email">
-      <input id="regPass" type="password" class="glass-input" placeholder="密码" autocomplete="new-password">
-      <button class="glass-btn glass-btn-primary w-full py-3" onclick="doRegister()">注册</button>
-      <div class="text-center text-xs" style="color:var(--text2)"><a href="#" onclick="sr('loginTab');return false" class="hover:text-white transition-colors">已有账号？登录</a></div>
-    </div>`;
-}
-
+function showSetup(){
+  document.getElementById('pageSubtitle').textContent='首次使用 · 初始化管理员';
+  document.getElementById('formContainer').innerHTML='<div class="space-y-3.5"><input id="suUser" class="glass-input" placeholder="管理员用户名"><input id="suEmail" class="glass-input" placeholder="邮箱"><input id="suPass" type="password" class="glass-input" placeholder="密码"><button class="glass-btn glass-btn-primary w-full py-3" onclick="doSetup()">🚀 初始化</button></div>'}
+function showLogin(){
+  document.getElementById('pageSubtitle').textContent='管理员登录';
+  document.getElementById('formContainer').innerHTML='<div class="space-y-3.5"><input id="loginUser" class="glass-input" placeholder="管理员用户名"><input id="loginPass" type="password" class="glass-input" placeholder="密码"><button class="glass-btn glass-btn-primary w-full py-3" onclick="doLogin()">登录</button><div class="text-center text-xs" style="color:var(--text2)">用户登录请前往 <a href="/user" class="hover:text-white transition-colors">/user</a></div></div>'}
 async function doSetup(){
-  const u=document.getElementById('suUser').value.trim(),
-        e=document.getElementById('suEmail').value.trim(),
-        p=document.getElementById('suPass').value;
+  const u=document.getElementById('suUser').value.trim(),e=document.getElementById('suEmail').value.trim(),p=document.getElementById('suPass').value;
   if(!u||!e||!p)return st('请填写完整','error');
   const r=await apiP('/api/auth/register',{username:u,email:e,password:p});
-  if(r.ok&&r.is_admin){
-    st('🎉 管理员创建成功！请登录','success');
-    showLoginForm();
-    document.getElementById('regLink').style.display='none';
-  }else st(r.error||'创建失败','error');
+  if(r.ok&&r.is_admin){st('🎉 管理员创建成功！','success');showLogin()}
+  else st(r.error||'创建失败','error');
 }
-
 async function doLogin(){
-  const u=document.getElementById('loginUser').value.trim(),
-        p=document.getElementById('loginPass').value;
+  const u=document.getElementById('loginUser').value.trim(),p=document.getElementById('loginPass').value;
   if(!u||!p)return st('请输入用户名和密码','error');
   const r=await apiP('/api/auth/login',{username:u,password:p});
-  if(r.ok){
-    localStorage.setItem(TK,r.token);
-    localStorage.setItem(UK,JSON.stringify(r.user));
-    window.location.href=r.user.role==='admin'?'/admin':'/user';
-  }else st(r.error||'登录失败','error');
+  if(r.ok){localStorage.setItem(TK,r.token);localStorage.setItem(UK,JSON.stringify(r.user));window.location.href='/admin'}
+  else st(r.error||'登录失败','error');
 }
-
-async function doRegister(){
-  const u=document.getElementById('regUser').value.trim(),
-        e=document.getElementById('regEmail').value.trim(),
-        p=document.getElementById('regPass').value;
-  if(!u||!e||!p)return st('请填写完整','error');
-  const r=await apiP('/api/auth/register',{username:u,email:e,password:p});
-  if(r.ok){st('注册成功，请登录','success');sr('loginTab')}
-  else st(r.error||'注册失败','error');
-}
-
 document.addEventListener('DOMContentLoaded',async()=>{
   const tok=localStorage.getItem(TK);
   if(tok){
-    try{
-      const u=JSON.parse(localStorage.getItem(UK)||'{}');
-      window.location.href='/admin';return;
-    }catch(e){}
+    try{const u=JSON.parse(localStorage.getItem(UK)||'{}');window.location.href='/admin';return}catch(e){}
   }
   try{
-    const rs=await apiG('/api/auth/register-status');
-    if(!rs.has_admin){showSetupForm();return}
-    showLoginForm();
-    if(!rs.enabled)document.getElementById('regLink').style.display='none';
-  }catch(e){showLoginForm()}
+    const rs=await fetch(API+'/api/auth/register-status').then(r=>r.json());
+    if(!rs.has_admin)showSetup();else showLogin();
+  }catch(e){showLogin()}
 });
 </script>
 </body>
