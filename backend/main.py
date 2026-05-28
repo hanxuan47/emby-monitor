@@ -73,8 +73,29 @@ async def lifespan(app: FastAPI):
                 logger.warning("Saved Emby config unreachable")
         break
 
+    # ── Start TG Bot if token exists ──────────────────────────────
+    async for session in get_session():
+        cfg_result = await session.execute(
+            select(PanelConfig).where(PanelConfig.key == "tg_bot_token")
+        )
+        tg_config = cfg_result.scalar_one_or_none()
+        if tg_config and tg_config.value:
+            raw_token = tg_config.value
+            decrypted = crypto_decrypt(raw_token)
+            tg_token = decrypted if decrypted else raw_token
+            if tg_token:
+                try:
+                    from .tg_bot import start_bot
+                    await start_bot(tg_token)
+                    logger.info("TG Bot started")
+                except Exception as e:
+                    logger.error(f"Failed to start TG Bot: {e}")
+        break
+
     yield
 
+    from .tg_bot import stop_bot
+    stop_bot()
     if emby:
         await emby.close()
     await async_engine.dispose()

@@ -109,6 +109,7 @@ class ServerConfig(Base):
 class UserBinding(Base):
     __tablename__ = "user_bindings"
     id = Column(Integer, primary_key=True, autoincrement=True)
+    panel_user_id = Column(Integer, nullable=True, index=True)  # PanelUser.id
     emby_user_id = Column(String(64), nullable=False, unique=True, index=True)
     emby_username = Column(String(128), nullable=False)
     platform = Column(String(32), nullable=False, default="telegram")

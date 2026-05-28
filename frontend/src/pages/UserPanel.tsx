@@ -4,6 +4,7 @@ import { Sidebar, TabBar } from '../components/Layout'
 import { Dashboard, Checkin, Settings, Placeholder } from './AdminPanel'
 import MediaDiscovery from './MediaDiscovery'
 import { MyRequests } from './Requests'
+import { TgBind } from './TgBind'
 import { Spinner } from './Setup'
 
 export default function UserPanel() {
@@ -21,6 +22,7 @@ export default function UserPanel() {
         <div className="page-enter">
           {page === 'discovery' && <MediaDiscovery />}
           {page === 'my-requests' && <MyRequests />}
+          {page === 'tg' && <TgBind />}
           {page === 'dashboard' && <Dashboard user={user} />}
           {page === 'checkin' && <Checkin user={user} />}
           {page === 'settings' && <Settings user={user} isAdmin={false} />}

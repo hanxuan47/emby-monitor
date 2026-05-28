@@ -1611,3 +1611,116 @@ async def validate_card(
     if ac.expires_at and ac.expires_at < datetime.utcnow():
         return {"ok": False, "error": "卡密已过期"}
     return {"ok": True, "points": ac.points}
+
+
+# ════════════════════════════════════════════════════════════════════
+# TG Bot 绑定 & 广播 API
+# ════════════════════════════════════════════════════════════════════
+
+
+@router.post("/api/tg/bind-code")
+async def get_tg_bind_code(
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Generate a one-time binding code for the current user."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    user = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not user:
+        return {"error": "用户不存在"}
+
+    from .tg_bot import generate_bind_code
+    code = generate_bind_code(user.id)
+    return {"ok": True, "code": code, "ttl_minutes": 5}
+
+
+@router.get("/api/tg/binding-status")
+async def get_tg_binding_status(
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Check if the current user has bound Telegram."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+
+    result = await db.execute(
+        select(UserBinding).where(
+            UserBinding.panel_user_id == decoded["user_id"],
+            UserBinding.platform == "telegram",
+        )
+    )
+    binding = result.scalar_one_or_none()
+    if binding:
+        return {
+            "ok": True,
+            "bound": True,
+            "chat_id": binding.platform_user_id,
+            "created_at": binding.created_at.isoformat() if binding.created_at else None,
+            "note": binding.note or "",
+        }
+    return {"ok": True, "bound": False}
+
+
+@router.post("/api/tg/unbind")
+async def unbind_tg(
+    token: str = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Unbind Telegram from the current user."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+
+    result = await db.execute(
+        select(UserBinding).where(
+            UserBinding.panel_user_id == decoded["user_id"],
+            UserBinding.platform == "telegram",
+        )
+    )
+    binding = result.scalar_one_or_none()
+    if not binding:
+        return {"error": "未绑定 TG"}
+
+    await db.delete(binding)
+    await db.commit()
+    return {"ok": True}
+
+
+@router.post("/api/tg/broadcast")
+async def tg_broadcast(
+    token: str = Query(...),
+    message: str = Query(...),
+    db: AsyncSession = Depends(get_session),
+):
+    """Admin: broadcast message to all bound Telegram users."""
+    decoded = decode_token(token)
+    if not decoded:
+        return {"error": "请先登录"}
+    admin = (await db.execute(select(PanelUser).where(PanelUser.id == decoded["user_id"]))).scalar_one_or_none()
+    if not admin or admin.role != "admin":
+        return {"error": "无权操作"}
+
+    # Get all TG bindings
+    results = await db.execute(
+        select(UserBinding).where(
+            UserBinding.platform == "telegram",
+            UserBinding.is_active == 1,
+        )
+    )
+    bindings = results.scalars().all()
+
+    if not bindings:
+        return {"error": "没有已绑定的用户"}
+
+    from .tg_bot import send_message
+    success_count = 0
+    for b in bindings:
+        ok = await send_message(b.platform_user_id, f"📢 <b>系统公告</b>\n\n{message}")
+        if ok:
+            success_count += 1
+
+    return {"ok": True, "sent": success_count, "total": len(bindings)}
+
