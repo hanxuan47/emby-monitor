@@ -95,10 +95,10 @@
 ### 一键部署（1Panel / Docker Compose）
 
 ```yaml
-# docker-compose.yml
+# docker-compose.yml（项目根目录已自带）
 services:
   emby-monitor:
-    image: ghcr.io/hanxuan47/emby-monitor:latest
+    build: .
     container_name: emby-monitor
     ports:
       - "8000:8000"
@@ -108,19 +108,24 @@ services:
     environment:
       - TZ=Asia/Shanghai
       # 🔑 加密密钥（强烈建议设置，32字节 base64）
-      - ENCRYPTION_KEY=your-base64-key-here
+      # - ENCRYPTION_KEY=your-base64-key-here
 ```
 
 ```bash
-# 启动
+# 克隆代码
+git clone https://github.com/hanxuan47/emby-monitor.git
+cd emby-monitor
+
+# 构建并启动
 docker compose up -d
 
 # 查看日志
 docker compose logs -f
 
 # 更新到最新版本
+git pull
 docker compose down
-docker compose pull
+docker compose build --no-cache
 docker compose up -d
 ```
 
