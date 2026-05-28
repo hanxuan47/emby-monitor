@@ -440,6 +440,18 @@ async def init_db():
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
+    # Auto-migrate: add missing columns for existing databases
+    async with async_engine.begin() as conn:
+        def _migrate(sync_conn):
+            from sqlalchemy import inspect, text
+            inspector = inspect(sync_conn)
+            cols = [c["name"] for c in inspector.get_columns("site_routes")]
+            if "tags" not in cols:
+                sync_conn.execute(text("ALTER TABLE site_routes ADD COLUMN tags TEXT DEFAULT ''"))
+                import logging
+                logging.getLogger("emby-db").info("Migrated: added tags column to site_routes")
+        await conn.run_sync(_migrate)
+
 
 async def save_session_history(session: AsyncSession, data: dict):
     from sqlalchemy import select

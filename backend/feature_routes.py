@@ -675,13 +675,14 @@ async def create_site(
     name: str = Query(...),
     url: str = Query(...),
     route_type: str = Query("emby"),
+    tags: str = Query(""),
     api_key: str = Query(""),
     note: str = Query(""),
     db: AsyncSession = Depends(get_session),
 ):
     """Add a new site route."""
     encrypted_key = crypto_encrypt(api_key) if api_key else ""
-    site = SiteRoute(name=name, url=url, route_type=route_type, api_key=encrypted_key, note=note)
+    site = SiteRoute(name=name, url=url, route_type=route_type, tags=tags, api_key=encrypted_key, note=note)
     db.add(site)
     await db.commit()
     await db.refresh(site)
