@@ -10,6 +10,7 @@ import { AiAdminPanel } from './AiPanel'
 import { TgBroadcast } from './TgBind'
 import { MyRequests, AdminRequests } from './Requests'
 import { UserMap } from './UserMap'
+import { EmbyUserManage } from './EmbyUserManage'
 
 // ─── Page Components ─────────────────────────────────────────
 
@@ -303,7 +304,7 @@ export default function AdminPanel() {
     'media-recent': <Placeholder name="最近更新" />,
     'media-reviews': <Placeholder name="评价" />,
     users: <Placeholder name="用户活动" />,
-    'users-mgmt': <Placeholder name="Emby用户管理" />,
+    'users-mgmt': <EmbyUserManage />,
     sites: <Placeholder name="站点" />,
     library: <Placeholder name="媒体库" />,
     codec: <Placeholder name="编码分析" />,

@@ -357,6 +357,24 @@ class AiInsight(Base):
 
 
 # ════════════════════════════════════════════════════════════════════
+# 17. Emby Password Reset Codes (TG 验证改密)
+# ════════════════════════════════════════════════════════════════════
+
+
+class EmbyPasswordReset(Base):
+    __tablename__ = "emby_password_resets"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    emby_user_id = Column(String(64), nullable=False, index=True)
+    emby_username = Column(String(128), nullable=False)
+    code = Column(String(8), nullable=False)
+    new_password = Column(String(256), default="")
+    used = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+    used_at = Column(DateTime, nullable=True)
+
+
+# ════════════════════════════════════════════════════════════════════
 # 16. AI Whitelist (AI分析白名单)
 # ════════════════════════════════════════════════════════════════════
 

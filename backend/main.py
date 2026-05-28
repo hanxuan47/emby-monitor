@@ -24,6 +24,7 @@ from .feature_routes import router as feature_router
 from .feature_routes import set_emby as set_features_emby
 from .models import (
     ActivationCode,
+    EmbyPasswordReset,
     LibrarySnapshot,
     LoginCode,
     PanelConfig,
@@ -607,19 +608,138 @@ async def create_user(
         return {"error": f"Failed to create user: {e}"}
 
 
-@app.post("/api/users/manage/password")
-async def set_user_password(
+@app.post("/api/users/manage/password/send-code")
+async def send_password_reset_code(
     user_id: str = Query(...),
-    new_password: str = Query(""),
+    db_session: AsyncSession = Depends(get_session),
 ):
-    """Set or reset a user's password."""
+    """Send a 6-digit security code via TG to the Emby user's bound account.
+    The code is required before resetting their password to a random one.
+    """
+    global emby
     if not emby:
         return {"error": "Not connected"}
+
     try:
-        await emby.update_user_password(user_id, new_password=new_password)
-        return {"ok": True}
+        # 1. Get Emby user info
+        users = await emby.get_users_with_policy()
+        target = next((u for u in users if u["id"] == user_id), None)
+        if not target:
+            return {"error": "Emby user not found"}
+        emby_username = target["name"]
+
+        # 2. Look up TG binding
+        result = await db_session.execute(
+            select(UserBinding).where(
+                UserBinding.emby_user_id == user_id,
+                UserBinding.platform == "telegram",
+                UserBinding.is_active == 1,
+            )
+        )
+        binding = result.scalar_one_or_none()
+        if not binding:
+            return {"error": f"用户 {emby_username} 未绑定 Telegram，无法发送验证码"}
+
+        # 3. Look up TG bot token
+        cfg_result = await db_session.execute(
+            select(PanelConfig).where(PanelConfig.key == "tg_bot_token")
+        )
+        cfg = cfg_result.scalar_one_or_none()
+        if not cfg or not cfg.value:
+            return {"error": "未配置 Telegram Bot Token，请在设置中配置"}
+
+        # 4. Generate 6-digit code, store with 5-min expiry
+        import random
+        code = str(random.randint(100000, 999999))
+        expires_at = datetime.utcnow() + timedelta(minutes=5)
+
+        reset_record = EmbyPasswordReset(
+            emby_user_id=user_id,
+            emby_username=emby_username,
+            code=code,
+            expires_at=expires_at,
+        )
+        db_session.add(reset_record)
+        await db_session.commit()
+
+        # 5. Send code via TG
+        chat_id = binding.platform_user_id
+        import httpx
+        text = (
+            f"🔐 *Emby 密码重置验证*\n\n"
+            f"用户：`{emby_username}`\n"
+            f"验证码：`{code}`\n\n"
+            f"验证码 5 分钟内有效，请勿泄露给他人。\n"
+            f"如果不是你本人操作，请忽略此消息。"
+        )
+        async with httpx.AsyncClient(timeout=10) as cl:
+            await cl.post(
+                f"https://api.telegram.org/bot{cfg.value}/sendMessage",
+                json={
+                    "chat_id": chat_id,
+                    "text": text,
+                    "parse_mode": "Markdown",
+                },
+            )
+
+        return {"ok": True, "emby_username": emby_username}
+
     except Exception as e:
-        return {"error": f"Failed: {e}"}
+        logger.error(f"Send TG code failed: {e}")
+        return {"error": f"发送验证码失败: {e}"}
+
+
+@app.post("/api/users/manage/password/reset")
+async def reset_user_password_with_code(
+    user_id: str = Query(...),
+    code: str = Query(...),
+    db_session: AsyncSession = Depends(get_session),
+):
+    """Verify TG security code and reset Emby user's password to a random one.
+    Password is system-generated, not user-defined.
+    """
+    global emby
+    if not emby:
+        return {"error": "Not connected"}
+
+    try:
+        # 1. Lookup valid code
+        result = await db_session.execute(
+            select(EmbyPasswordReset).where(
+                EmbyPasswordReset.emby_user_id == user_id,
+                EmbyPasswordReset.code == code,
+                EmbyPasswordReset.used == 0,
+                EmbyPasswordReset.expires_at > datetime.utcnow(),
+            ).order_by(EmbyPasswordReset.id.desc()).limit(1)
+        )
+        reset_record = result.scalar_one_or_none()
+        if not reset_record:
+            return {"error": "验证码无效或已过期，请重新发送"}
+
+        # 2. Generate random 12-char password (letters + digits)
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits
+        new_password = ''.join(secrets.choice(alphabet) for _ in range(12))
+
+        # 3. Reset password in Emby
+        await emby.update_user_password(user_id, new_password=new_password)
+
+        # 4. Mark code as used
+        reset_record.used = 1
+        reset_record.new_password = ""
+        reset_record.used_at = datetime.utcnow()
+        await db_session.commit()
+
+        return {
+            "ok": True,
+            "new_password": new_password,
+            "emby_username": reset_record.emby_username,
+        }
+
+    except Exception as e:
+        logger.error(f"Password reset failed: {e}")
+        return {"error": f"密码重置失败: {e}"}
 
 
 @app.delete("/api/users/manage/{user_id}")
