@@ -172,21 +172,30 @@ async def login(
     if not user.is_active:
         return {"error": "账号已被禁用"}
 
+    # Extract values before commit to avoid expired-object access in async mode
+    uid = user.id
+    urole = user.role
+    uname = user.username
+    uemail = user.email
+    upoints = user.points
+    uemby_name = user.emby_username
+    uemby_id = user.emby_user_id
+
     user.last_login = datetime.utcnow()
     await db.commit()
 
-    token = gen_token(user.id, user.role)
+    token = gen_token(uid, urole)
     return {
         "ok": True,
         "token": token,
         "user": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "role": user.role,
-            "points": user.points,
-            "emby_username": user.emby_username,
-            "emby_user_id": user.emby_user_id,
+            "id": uid,
+            "username": uname,
+            "email": uemail,
+            "role": urole,
+            "points": upoints,
+            "emby_username": uemby_name,
+            "emby_user_id": uemby_id,
         },
     }
 
