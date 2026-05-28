@@ -23,6 +23,7 @@ from .emby_client import EmbyClient
 from .feature_routes import router as feature_router
 from .feature_routes import set_emby as set_features_emby
 from .models import (
+    ActivationCode,
     LibrarySnapshot,
     LoginCode,
     ServerConfig,
