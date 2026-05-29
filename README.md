@@ -155,7 +155,7 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
-      - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/emby_monitor.db
       - ENCRYPTION_KEY=改成你生成的密钥
 ```
 

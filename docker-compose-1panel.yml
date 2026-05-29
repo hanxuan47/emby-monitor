@@ -40,6 +40,6 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
-      - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/emby_monitor.db
       # ⚠️ 下面这行必须改！用你生成的密钥替换
       - ENCRYPTION_KEY=请替换为你的密钥

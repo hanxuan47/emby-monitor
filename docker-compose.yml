@@ -12,7 +12,7 @@ services:
     environment:
       - TZ=Asia/Shanghai
       # 📁 数据库路径（必须在 volume 挂载目录内，否则重启丢失）
-      - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
+      - DATABASE_URL=sqlite+aiosqlite:////app/data/emby_monitor.db
       # 🔑 加密密钥（⚠️ 强烈建议设置固定密钥，防止数据迁移后无法解密！）
       # 生成命令:
       #   python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
