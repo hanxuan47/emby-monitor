@@ -103,9 +103,88 @@ docker compose up -d
 # 4. 访问 http://localhost:8000
 ```
 
-### 1Panel 部署
+### 1Panel 部署（傻瓜式）
 
-使用 `docker-compose-1panel.yml`，在 1Panel → 容器 → 编排中粘贴内容即可。
+#### 方法一：一键脚本（推荐）
+
+```bash
+# 在 1Panel → 终端 中执行（复制粘贴即可）
+bash <(curl -fsSL https://raw.githubusercontent.com/hanxuan47/emby-monitor/main/install-1panel.sh)
+```
+
+脚本会自动完成：
+1. 选择安装目录和端口
+2. 生成加密密钥（请截图保存！）
+3. 克隆项目代码
+4. 生成编排文件
+
+完成后，在 **1Panel → 容器 → 编排 → 导入编排** 粘贴生成的 `docker-compose.yml` 路径即可。
+
+#### 方法二：手动编排导入
+
+**第一步：生成密钥**
+
+在 1Panel 终端执行：
+```bash
+python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+```
+
+复制输出（类似 `a3Fh2dG8xP9vB4nM6kL1zR5tW7yC0eJ3`），后面要用。
+
+**第二步：导入编排**
+
+1. 1Panel → **容器** → **编排** → **创建编排**
+2. 粘贴以下内容，**替换** `ENCRYPTION_KEY` 和目录路径：
+
+```yaml
+services:
+  emby-monitor:
+    image: python:3.12-slim
+    container_name: emby-monitor
+    ports:
+      - "8000:8000"
+    volumes:
+      - /你的路径/emby-monitor:/app
+      - /你的路径/emby-monitor-data:/app/data
+    working_dir: /app
+    command: >
+      sh -c "
+        pip install -r backend/requirements.txt -q --no-cache-dir &&
+        uvicorn backend.main:app --host 0.0.0.0 --port 8000
+      "
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+      - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
+      - ENCRYPTION_KEY=填你生成的密钥
+```
+
+3. 点击 **确认** → 自动启动
+
+#### 方法三：容器手动创建
+
+1. 1Panel → **容器** → **创建容器**
+2. 填写以下信息：
+
+| 字段 | 值 |
+|------|-----|
+| 镜像 | `python:3.12-slim` |
+| 名称 | `emby-monitor` |
+| 端口 | `8000:8000` |
+| 挂载 ① | 项目目录 → `/app` |
+| 挂载 ② | 数据目录 → `/app/data` |
+| 工作目录 | `/app` |
+| 命令 | `sh -c "pip install -r backend/requirements.txt -q --no-cache-dir && uvicorn backend.main:app --host 0.0.0.0 --port 8000"` |
+
+3. 环境变量：
+
+```
+TZ=Asia/Shanghai
+DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
+ENCRYPTION_KEY=你生成的密钥
+```
+
+4. 点击**确认**启动
 
 ### 更新
 
