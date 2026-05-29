@@ -120,21 +120,10 @@ bash <(curl -fsSL https://raw.githubusercontent.com/hanxuan47/emby-monitor/main/
 
 完成后，在 **1Panel → 容器 → 编排 → 导入编排** 粘贴生成的 `docker-compose.yml` 路径即可。
 
-#### 方法二：手动编排导入
-
-**第一步：生成密钥**
-
-在 1Panel 终端执行：
-```bash
-python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
-```
-
-复制输出（类似 `a3Fh2dG8xP9vB4nM6kL1zR5tW7yC0eJ3`），后面要用。
-
-**第二步：导入编排**
+#### 方法二：手动编排导入（复制粘贴即用）
 
 1. 1Panel → **容器** → **编排** → **创建编排**
-2. 粘贴以下内容，**替换** `ENCRYPTION_KEY` 和目录路径：
+2. 把下面内容**完整粘贴**，只改 `ENCRYPTION_KEY` 和端口（如需）：
 
 ```yaml
 services:
@@ -144,11 +133,21 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - /你的路径/emby-monitor:/app
-      - /你的路径/emby-monitor-data:/app/data
+      - ./emby-monitor:/app
+      - ./emby-monitor-data:/app/data
     working_dir: /app
     command: >
       sh -c "
+        if [ ! -f /app/backend/main.py ]; then
+          echo '>>> 首次运行，正在克隆项目...';
+          apt-get update -qq && apt-get install -y -qq git &&
+          git clone --depth 1 https://github.com/hanxuan47/emby-monitor.git /tmp/repo &&
+          cp -r /tmp/repo/* /app/ &&
+          cp -r /tmp/repo/.[!.]* /app/ 2>/dev/null || true &&
+          rm -rf /tmp/repo &&
+          echo '>>> 代码克隆完成';
+        fi;
+        echo '>>> 安装依赖 + 启动...';
         pip install -r backend/requirements.txt -q --no-cache-dir &&
         uvicorn backend.main:app --host 0.0.0.0 --port 8000
       "
@@ -156,10 +155,12 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
-      - ENCRYPTION_KEY=填你生成的密钥
+      - ENCRYPTION_KEY=改成你生成的密钥
 ```
 
-3. 点击 **确认** → 自动启动
+3. 点击**确认** → 等待 1-2 分钟（首次需克隆代码+装依赖）
+
+> 💡 编排中的 `./emby-monitor` 和 `./emby-monitor-data` 是相对路径，不需要改。只用改 `ENCRYPTION_KEY` 一行。
 
 #### 方法三：容器手动创建
 

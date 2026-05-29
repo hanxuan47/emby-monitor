@@ -1,3 +1,13 @@
+# ═══════════════════════════════════════════════════════
+# Emby Monitor — 1Panel / Docker Compose 一键编排
+# ═══════════════════════════════════════════════════════
+# 使用方法:
+#   1. 把这个文件放到你想安装的目录
+#   2. 在 1Panel → 容器 → 编排 → 创建编排 → 粘贴全文
+#   3. 只需要改 ENCRYPTION_KEY（其他一律不用动！）
+#   4. 点击确认 → 自动克隆代码 → 自动安装依赖 → 启动
+# ═══════════════════════════════════════════════════════
+
 services:
   emby-monitor:
     image: python:3.12-slim
@@ -5,28 +15,30 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # 源码目录（克隆下来的项目根目录）
+      # 下面两行不用改！相对路径自动定位
       - ./emby-monitor:/app
-      # 数据持久化（数据库 + 加密密钥）
       - ./emby-monitor-data:/app/data
     working_dir: /app
+    # 启动时自动克隆代码（如果还没克隆）+ 安装依赖 + 启动
     command: >
       sh -c "
-        pip install -r backend/requirements.txt -q --no-cache-dir &&
+        if [ ! -f /app/backend/main.py ]; then
+          echo '>>> 首次运行，正在克隆项目...';
+          apt-get update -qq && apt-get install -y -qq git && 
+          git clone --depth 1 https://github.com/hanxuan47/emby-monitor.git /tmp/repo &&
+          cp -r /tmp/repo/* /app/ &&
+          cp -r /tmp/repo/.[!.]* /app/ 2>/dev/null || true &&
+          rm -rf /tmp/repo &&
+          echo '>>> 代码克隆完成';
+        fi;
+        echo '>>> 安装 Python 依赖...';
+        pip install -r backend/requirements.txt -q --no-cache-dir;
+        echo '>>> 启动服务...';
         uvicorn backend.main:app --host 0.0.0.0 --port 8000
       "
     restart: unless-stopped
     environment:
       - TZ=Asia/Shanghai
       - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
-      # 🔑 加密密钥（⚠️ 强烈建议设置固定密钥，防止数据迁移后无法解密！）
-      # 生成命令:
-      #   python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
-      # 生成后取消下面注释并填入:
-      # - ENCRYPTION_KEY=your-generated-key-here
-    healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
+      # ⚠️ 下面这行必须改！用你生成的密钥替换
+      - ENCRYPTION_KEY=请替换为你的密钥
