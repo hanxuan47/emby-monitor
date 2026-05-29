@@ -28,7 +28,7 @@ export function Dashboard({ user }: { user: any }) {
   return (
     <div className="space-y-5">
       {/* ── 欢迎横幅 ── */}
-      <div className="glass-ios p-5 relative overflow-hidden">
+      <div className="glass-vibrant p-5 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.07] to-purple-500/[0.04]" />
         <div className="relative">
           <div className="text-xs text-[rgba(255,255,255,0.3)] font-medium tracking-wider uppercase mb-1">Overview</div>
@@ -42,7 +42,7 @@ export function Dashboard({ user }: { user: any }) {
       </div>
 
       {/* ── 核心指标卡片 ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
         <StatCard
           icon="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"
           label="活跃流"
@@ -355,6 +355,7 @@ export function UserPanel() {
 function PanelShell({ page, onNavigate, children }: { page: string; onNavigate: (id: string) => void; children: React.ReactNode }) {
   const [connected, setConnected] = useState(false)
   const [name, setName] = useState('')
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   useEffect(() => {
     apiGet('/api/config/status').then(r => {
@@ -363,9 +364,18 @@ function PanelShell({ page, onNavigate, children }: { page: string; onNavigate: 
   }, [])
 
   return (
-    <div className="flex min-h-screen">
-      <Sidebar currentPage={page} onNavigate={onNavigate} />
+    <div className="flex min-h-screen bg-[#0a0c14]">
+      <Sidebar currentPage={page} onNavigate={onNavigate} mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <main className="flex-1 min-w-0 overflow-y-auto h-screen p-5 max-md:p-3 max-md:pb-20">
+        {/* ── Mobile hamburger ── */}
+        <button
+          className="md:hidden mb-3 p-2 -ml-1 rounded-lg hover:bg-[rgba(255,255,255,0.06)] active:scale-90 transition-transform text-white/50"
+          onClick={() => setMobileOpen(true)}
+        >
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round" />
+          </svg>
+        </button>
         <div className="page-enter">{children}</div>
       </main>
       <TabBar currentPage={page} onNavigate={onNavigate} />

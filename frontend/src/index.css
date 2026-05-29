@@ -11,10 +11,13 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
+  /* Dark background for glass to sit on */
+  background: #0a0c14;
 }
 
 /* Glassmorphism utilities */
 @layer components {
+  /* ── Base glass card ── */
   .glass-card {
     @apply bg-[rgba(18,21,31,0.7)] backdrop-blur-2xl border border-[rgba(255,255,255,0.07)] rounded-[18px] p-5 mb-3 transition-all duration-200;
   }
@@ -22,6 +25,8 @@ body {
     border-color: rgba(255,255,255,0.12);
     transform: translateY(-1px);
   }
+
+  /* ── Input ── */
   .glass-input {
     @apply bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.07)] rounded-xl px-4 py-[.7rem] text-[#f0f2f5] text-sm outline-none w-full transition-all;
   }
@@ -30,10 +35,13 @@ body {
     background: rgba(59,130,246,0.08);
     box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
   }
+
+  /* ── Buttons ── */
   .glass-btn {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-[.6rem] rounded-xl text-sm font-medium border-none cursor-pointer transition-all duration-200 backdrop-blur-md;
+    @apply inline-flex items-center justify-center gap-2 px-5 py-[.6rem] rounded-xl text-sm font-medium border-none cursor-pointer transition-all duration-200 backdrop-blur-md select-none;
+    -webkit-tap-highlight-color: transparent;
   }
-  .glass-btn:active { transform: scale(.96); }
+  .glass-btn:active { transform: scale(.94); }
   .glass-btn-primary {
     @apply text-white;
     background: linear-gradient(135deg, rgba(59,130,246,0.85), rgba(139,92,246,0.85));
@@ -43,6 +51,10 @@ body {
     box-shadow: 0 6px 25px rgba(59,130,246,0.35);
     transform: translateY(-1px);
   }
+  .glass-btn-primary:active {
+    box-shadow: 0 2px 8px rgba(59,130,246,0.2);
+    transform: scale(.94) translateY(0);
+  }
   .glass-btn-secondary {
     @apply bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.07)] text-[#f0f2f5];
   }
@@ -50,11 +62,21 @@ body {
     background: rgba(255,255,255,0.10);
     border-color: rgba(255,255,255,0.12);
   }
+  .glass-btn-secondary:active {
+    background: rgba(255,255,255,0.04);
+    transform: scale(.95);
+  }
   .glass-btn-danger {
     @apply text-white;
     background: linear-gradient(135deg, rgba(220,38,38,0.8), rgba(185,28,28,0.8));
     box-shadow: 0 4px 15px rgba(220,38,38,0.2);
   }
+  .glass-btn-danger:active {
+    box-shadow: 0 2px 8px rgba(220,38,38,0.15);
+    transform: scale(.94);
+  }
+
+  /* ── Badges ── */
   .glass-badge {
     @apply inline-flex items-center px-2 py-[.1rem] rounded-full text-[.7rem] font-medium gap-1;
   }
@@ -63,29 +85,89 @@ body {
   .glass-badge-yellow { @apply bg-[rgba(251,191,36,0.12)] text-[#fbbf24] border border-[rgba(251,191,36,0.2)]; }
   .glass-badge-red { @apply bg-[rgba(248,113,113,0.12)] text-[#f87171] border border-[rgba(248,113,113,0.2)]; }
   .glass-badge-purple { @apply bg-[rgba(167,139,250,0.12)] text-[#a78bfa] border border-[rgba(167,139,250,0.2)]; }
-  .glass-table { @apply w-full border-collapse text-sm; }
-  .glass-table th { @apply text-left px-3 py-[.65rem] text-[rgba(255,255,255,0.3)] font-medium text-[.75rem] uppercase tracking-wider border-b border-[rgba(255,255,255,0.07)]; }
+
+  /* ── Tables ── */
+  .glass-table { @apply w-full border-collapse text-sm min-w-[600px]; }
+  .glass-table th { @apply text-left px-3 py-[.65rem] text-[rgba(255,255,255,0.3)] font-medium text-[.75rem] uppercase tracking-wider border-b border-[rgba(255,255,255,0.07)] whitespace-nowrap; }
   .glass-table td { @apply px-3 py-[.6rem] border-b border-[rgba(255,255,255,0.03)]; }
+  .table-responsive { @apply overflow-x-auto -mx-3 px-3 max-md:-mx-3 max-md:px-3; }
+
+  /* ── Stat cards ── */
   .stat-card {
     @apply bg-[rgba(18,21,31,0.65)] backdrop-blur-2xl border border-[rgba(255,255,255,0.07)] rounded-[18px] p-4 transition-all;
   }
   .stat-card:hover { border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }
+  .stat-card:active { transform: scale(.97); }
   .stat-value { @apply text-[1.75rem] font-bold tracking-tight leading-tight; }
   .stat-label { @apply text-[.75rem] text-[rgba(255,255,255,0.5)] mt-[.15rem] font-medium; }
+
+  /* ── iOS glass (standard) ── */
   .glass-ios {
     background: rgba(18,21,31,0.6);
-    backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
+    backdrop-filter: blur(30px) saturate(140%);
+    -webkit-backdrop-filter: blur(30px) saturate(140%);
     border: 1px solid rgba(255,255,255,0.07);
     border-radius: 18px;
     transition: all 0.2s ease;
   }
   .glass-ios:hover { background: rgba(18,21,31,0.7); }
+  .glass-ios:active { transform: scale(.98); }
+
+  /* ── Vibrant glass (modal-level, richer) ── */
+  .glass-vibrant {
+    background: rgba(15,18,28,0.78);
+    backdrop-filter: blur(40px) saturate(160%) brightness(1.05);
+    -webkit-backdrop-filter: blur(40px) saturate(160%) brightness(1.05);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 22px;
+    box-shadow:
+      0 8px 32px rgba(0,0,0,0.4),
+      0 0 0 0.5px rgba(255,255,255,0.06) inset;
+    transition: all 0.25s ease;
+  }
+  .glass-vibrant:hover {
+    box-shadow:
+      0 12px 40px rgba(0,0,0,0.5),
+      0 0 0 0.5px rgba(255,255,255,0.08) inset;
+  }
+  .glass-vibrant:active { transform: scale(.98); }
+
+  /* ── Subtle glass (for backgrounds, large areas) ── */
+  .glass-subtle {
+    background: rgba(18,21,31,0.35);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    border: 1px solid rgba(255,255,255,0.04);
+    transition: all 0.2s ease;
+  }
+
+  /* ── Press effect utility ── */
+  .glass-press {
+    transition: transform 0.15s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .glass-press:active {
+    transform: scale(0.96);
+  }
+
+  /* ── Spring scale press (for interactive cards) ── */
+  .glass-spring {
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .glass-spring:active {
+    transform: scale(0.94);
+    transition: transform 0.1s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+
+  /* ── Sidebar ── */
   .sidebar-link {
-    @apply flex items-center gap-3 px-3 py-[.55rem] mx-1 rounded-xl cursor-pointer transition-all text-[rgba(255,255,255,0.5)] text-sm font-medium;
+    @apply flex items-center gap-3 px-3 py-[.55rem] mx-1 rounded-xl cursor-pointer transition-all text-[rgba(255,255,255,0.5)] text-sm font-medium max-md:py-3 max-md:text-[.8125rem];
+    -webkit-tap-highlight-color: transparent;
   }
   .sidebar-link:hover { @apply bg-[rgba(255,255,255,0.04)] text-[#f0f2f5]; }
+  .sidebar-link:active { @apply bg-[rgba(255,255,255,0.06)] scale-[0.97]; }
   .sidebar-link.active { @apply bg-[rgba(59,130,246,0.10)] text-[#60a5fa]; }
+
+  /* ── Pulse dot ── */
   .pulse-dot { @apply w-[7px] h-[7px] rounded-full inline-block relative; }
   .pulse-dot.green { background: #34d399; }
   .pulse-dot.green::after {
@@ -93,8 +175,22 @@ body {
     border: 2px solid rgba(52,211,153,0.3); animation: pulse-ring 2s infinite;
   }
   .pulse-dot.red { background: #f87171; }
+
+  /* ── Keyframes ── */
   @keyframes pulse-ring { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:0} }
   @keyframes spin { to { transform: rotate(360deg); } }
   @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes springIn {
+    0% { transform: scale(0.92); opacity: 0; }
+    60% { transform: scale(1.02); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
   .page-enter { animation: fadeIn .3s ease; }
+  .slide-up { animation: slideUp 0.4s cubic-bezier(0.32, 0.72, 0, 1); }
+  .spring-in { animation: springIn 0.5s cubic-bezier(0.32, 0.72, 0, 1); }
 }

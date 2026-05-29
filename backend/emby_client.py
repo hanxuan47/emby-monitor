@@ -141,7 +141,6 @@ class EmbyClient:
         """Update a user's policy (permissions, restrictions)."""
         await self._post(
             f"/emby/Users/{user_id}/Policy",
-            params={"api_key": self.api_key},
             json_body=policy,
         )
 

@@ -13,7 +13,16 @@ services:
       - TZ=Asia/Shanghai
       # 📁 数据库路径（必须在 volume 挂载目录内，否则重启丢失）
       - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
-      # 🔐 加密密钥文件路径（与数据库同目录自动推导，无需单独设置）
-      # 🔑 加密密钥（强烈建议设置固定密钥，防止数据迁移后无法解密）
-      # 生成命令: docker compose run --rm emby-monitor python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
-      # - ENCRYPTION_KEY=your-base64-key-here
+      # 🔑 加密密钥（⚠️ 强烈建议设置固定密钥，防止数据迁移后无法解密！）
+      # 生成命令:
+      #   python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+      # 生成后取消下面注释并填入:
+      # - ENCRYPTION_KEY=your-generated-key-here
+      # 🌐 CORS 跨域来源（生产环境建议设置为具体域名）
+      # - CORS_ORIGINS=https://your-domain.com
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

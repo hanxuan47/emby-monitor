@@ -1,6 +1,35 @@
+# Dependencies
 node_modules/
-dist/
 __pycache__/
 *.pyc
+*.pyo
+.venv/
+venv/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment & secrets
 .env
+*.key
+.encryption_key
+
+# Database & data
 data/
+*.db
+*.db-journal
+*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/

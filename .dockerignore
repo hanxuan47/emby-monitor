@@ -2,9 +2,15 @@ node_modules
 .git
 .gitignore
 *.md
+!README.md
 data/
 __pycache__
 *.pyc
 .env
 .venv
 venv
+.docker
+.vscode
+.idea
+*.tsbuildinfo
+.env.example

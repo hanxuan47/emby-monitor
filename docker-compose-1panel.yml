@@ -19,5 +19,14 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - DATABASE_URL=sqlite+aiosqlite:///app/data/emby_monitor.db
-      # 🔑 如需固定加密密钥（强烈建议），取消注释并填入：
-      # - ENCRYPTION_KEY=your-base64-key-here
+      # 🔑 加密密钥（⚠️ 强烈建议设置固定密钥，防止数据迁移后无法解密！）
+      # 生成命令:
+      #   python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
+      # 生成后取消下面注释并填入:
+      # - ENCRYPTION_KEY=your-generated-key-here
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

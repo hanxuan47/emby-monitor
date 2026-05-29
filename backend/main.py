@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -22,12 +23,14 @@ from .emby_crypto import encrypt as crypto_encrypt
 from .emby_client import EmbyClient
 from .feature_routes import router as feature_router
 from .feature_routes import set_emby as set_features_emby
+from .feature_routes import require_auth, require_admin
 from .models import (
     ActivationCode,
     EmbyPasswordReset,
     LibrarySnapshot,
     LoginCode,
     PanelConfig,
+    PanelUser,
     ServerConfig,
     SessionHistory,
     UserActivity,
@@ -50,6 +53,87 @@ logger = logging.getLogger("emby-monitor")
 emby: EmbyClient | None = None
 active_streams: dict[str, dict[str, Any]] = {}  # session_id -> data
 ws_clients: set[WebSocket] = set()
+_poll_task: asyncio.Task | None = None
+
+
+async def _background_poll(interval: int = 60):
+    """Background task that periodically polls Emby for session data.
+
+    Runs every `interval` seconds to collect:
+      - Session history (playback records)
+      - Library snapshots (every 6 hours)
+      - User activity (daily play counts)
+    """
+    import asyncio as _asyncio
+    logger.info(f"Background poll started (interval={interval}s)")
+
+    while True:
+        try:
+            await _asyncio.sleep(interval)
+            if not emby:
+                continue
+
+            streams = await emby.get_active_streams()
+            async for db_session in get_session():
+                for s in streams:
+                    await save_session_history(db_session, s)
+
+                # ── Library snapshot (every 6 hours) ──────────────
+                result = await db_session.execute(
+                    select(LibrarySnapshot).order_by(LibrarySnapshot.taken_at.desc()).limit(1)
+                )
+                last_row = result.scalar_one_or_none()
+                should_snapshot = (
+                    not last_row
+                    or (datetime.utcnow() - last_row.taken_at).total_seconds() >= 21600
+                )
+                if should_snapshot:
+                    try:
+                        lib_stats = await emby.get_library_stats()
+                        await record_library_snapshot(db_session, lib_stats)
+                        logger.info("Library snapshot recorded")
+                    except Exception as snap_err:
+                        logger.warning(f"Library snapshot failed: {snap_err}")
+
+                # ── User activity ────────────────────────────────
+                today = datetime.utcnow().strftime("%Y-%m-%d")
+                user_streams = defaultdict(list)
+                for s in streams:
+                    uid = s.get("UserId", "")
+                    uname = s.get("UserName", "")
+                    user_streams[(uid, uname)].append(s)
+
+                for (uid, uname), user_sessions in user_streams.items():
+                    result2 = await db_session.execute(
+                        select(UserActivity).where(
+                            UserActivity.user_id == uid,
+                            UserActivity.date == today,
+                        )
+                    )
+                    act = result2.scalar_one_or_none()
+                    if not act:
+                        act = UserActivity(
+                            user_id=uid, user_name=uname, date=today
+                        )
+                        db_session.add(act)
+                    act.play_count += len(user_sessions)
+                    items = set()
+                    for s in user_sessions:
+                        now = s.get("NowPlayingItem") or {}
+                        items.add(now.get("Id", ""))
+                        if s.get("TranscodingInfo"):
+                            act.transcoded_count += 1
+                    act.unique_items = len(items)
+                    act.duration_seconds += 30
+
+                await db_session.commit()
+                break  # Only one session needed per poll cycle
+
+        except asyncio.CancelledError:
+            logger.info("Background poll cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Background poll error: {e}")
 
 
 @asynccontextmanager
@@ -94,7 +178,18 @@ async def lifespan(app: FastAPI):
                     logger.error(f"Failed to start TG Bot: {e}")
         break
 
+    # ── Start background polling ──────────────────────────────────
+    _poll_task = asyncio.create_task(_background_poll(interval=60))
+
     yield
+
+    # ── Shutdown ──────────────────────────────────────────────────
+    if _poll_task:
+        _poll_task.cancel()
+        try:
+            await _poll_task
+        except asyncio.CancelledError:
+            pass
 
     from .tg_bot import stop_bot
     stop_bot()
@@ -106,7 +201,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Emby Monitor", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -124,8 +219,10 @@ async def set_config(
     host: str = Query(...),
     api_key: str = Query(...),
     name: str = Query("My Emby"),
+    admin: PanelUser = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
+    """Configure Emby server connection (admin only)."""
     global emby
 
     client = EmbyClient(host=host, api_key=api_key)
@@ -173,8 +270,11 @@ async def config_status():
 
 
 @app.get("/api/config/masked")
-async def config_masked(db_session: AsyncSession = Depends(get_session)):
-    """Return config with masked secrets for frontend display."""
+async def config_masked(
+    user: PanelUser = Depends(require_auth),
+    db_session: AsyncSession = Depends(get_session),
+):
+    """Return config with masked secrets for admin display."""
     from .emby_crypto import mask as crypto_mask
     if not emby:
         return {"connected": False}
@@ -546,8 +646,11 @@ async def codec_breakdown(db_session: AsyncSession = Depends(get_session)):
 
 
 @app.get("/api/users/manage")
-async def get_users_manage(db_session: AsyncSession = Depends(get_session)):
-    """List all Emby users with binding info."""
+async def get_users_manage(
+    user: PanelUser = Depends(require_auth),
+    db_session: AsyncSession = Depends(get_session),
+):
+    """List all Emby users with binding info (auth required)."""
     if not emby:
         return {"error": "Not connected"}
 
@@ -589,9 +692,10 @@ async def get_users_manage(db_session: AsyncSession = Depends(get_session)):
 async def create_user(
     name: str = Query(...),
     password: str = Query(""),
+    admin: PanelUser = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    """Create a new Emby user."""
+    """Create a new Emby user (admin only)."""
     if not emby:
         return {"error": "Not connected"}
 
@@ -611,11 +715,10 @@ async def create_user(
 @app.post("/api/users/manage/password/send-code")
 async def send_password_reset_code(
     user_id: str = Query(...),
+    admin: PanelUser = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    """Send a 6-digit security code via TG to the Emby user's bound account.
-    The code is required before resetting their password to a random one.
-    """
+    """Send a 6-digit security code via TG to the Emby user's bound account (admin only)."""
     global emby
     if not emby:
         return {"error": "Not connected"}
@@ -693,11 +796,10 @@ async def send_password_reset_code(
 async def reset_user_password_with_code(
     user_id: str = Query(...),
     code: str = Query(...),
+    admin: PanelUser = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    """Verify TG security code and reset Emby user's password to a random one.
-    Password is system-generated, not user-defined.
-    """
+    """Verify TG security code and reset Emby user's password (admin only)."""
     global emby
     if not emby:
         return {"error": "Not connected"}
@@ -743,8 +845,11 @@ async def reset_user_password_with_code(
 
 
 @app.delete("/api/users/manage/{user_id}")
-async def delete_user(user_id: str):
-    """Delete an Emby user."""
+async def delete_user(
+    user_id: str,
+    admin: PanelUser = Depends(require_admin),
+):
+    """Delete an Emby user (admin only)."""
     if not emby:
         return {"error": "Not connected"}
     try:
@@ -758,8 +863,9 @@ async def delete_user(user_id: str):
 async def toggle_user(
     user_id: str = Query(...),
     disable: bool = Query(True),
+    admin: PanelUser = Depends(require_admin),
 ):
-    """Enable or disable an Emby user."""
+    """Enable or disable an Emby user (admin only)."""
     if not emby:
         return {"error": "Not connected"}
     try:
@@ -782,8 +888,9 @@ async def update_user_policy(
     remote_bitrate: int = Query(0),
     enable_all_folders: bool = Query(True),
     enable_all_devices: bool = Query(True),
+    admin: PanelUser = Depends(require_admin),
 ):
-    """Update user policy (permissions, limits)."""
+    """Update user policy — permissions, limits (admin only)."""
     if not emby:
         return {"error": "Not connected"}
     try:
@@ -807,8 +914,11 @@ async def update_user_policy(
 
 
 @app.get("/api/bindings")
-async def list_bindings(db_session: AsyncSession = Depends(get_session)):
-    """List all external platform bindings."""
+async def list_bindings(
+    user: PanelUser = Depends(require_auth),
+    db_session: AsyncSession = Depends(get_session),
+):
+    """List all external platform bindings (auth required)."""
     result = await db_session.execute(select(UserBinding).order_by(UserBinding.platform))
     bindings = result.scalars().all()
     return {
@@ -837,9 +947,10 @@ async def bind_user(
     platform_user_id: str = Query(...),
     platform_username: str = Query(""),
     note: str = Query(""),
+    admin: PanelUser = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    """Bind an Emby user to an external platform (Telegram, etc.)."""
+    """Bind an Emby user to an external platform (admin only)."""
     # Check if already bound
     result = await db_session.execute(
         select(UserBinding).where(UserBinding.emby_user_id == emby_user_id)
@@ -870,9 +981,10 @@ async def bind_user(
 @app.post("/api/bindings/unbind")
 async def unbind_user(
     emby_user_id: str = Query(...),
+    admin: PanelUser = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    """Remove a binding for an Emby user."""
+    """Remove a binding for an Emby user (admin only)."""
     result = await db_session.execute(
         select(UserBinding).where(UserBinding.emby_user_id == emby_user_id)
     )
@@ -891,9 +1003,10 @@ async def generate_login_code(
     emby_user_id: str = Query(...),
     emby_username: str = Query(""),
     password: str = Query(""),
+    user: PanelUser = Depends(require_auth),
     db_session: AsyncSession = Depends(get_session),
 ):
-    """Generate a one-time login code for an Emby user."""
+    """Generate a one-time login code for an Emby user (auth required)."""
     import secrets
 
     code = secrets.token_hex(8).upper()
@@ -1007,8 +1120,11 @@ async def websocket_endpoint(ws: WebSocket):
 
 
 @app.post("/api/refresh")
-async def trigger_refresh(db_session: AsyncSession = Depends(get_session)):
-    """Manually poll Emby and record library snapshot."""
+async def trigger_refresh(
+    user: PanelUser = Depends(require_auth),
+    db_session: AsyncSession = Depends(get_session),
+):
+    """Manually poll Emby and record library snapshot (auth required)."""
     global emby
     if not emby:
         return {"error": "Not connected"}
@@ -1092,13 +1208,29 @@ async def serve_spa(full_path: str):
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 
-# ── Helper for the background poll timer ────────────────────────────
+# ── Health check endpoint (for Docker healthcheck) ──────────────────
 
 
-@app.on_event("startup")
-async def startup_poll():
-    """No background task — polling driven by WS 'ping' or manual refresh."""
-    pass
+@app.get("/health")
+async def health_check():
+    """Health check for Docker / load balancers."""
+    db_ok = False
+    try:
+        async for s in get_session():
+            await s.execute(text("SELECT 1"))
+            db_ok = True
+            break
+    except Exception:
+        pass
+
+    emby_ok = emby is not None and await emby.health() if emby else False
+
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "database": db_ok,
+        "emby": emby_ok,
+        "time": datetime.utcnow().isoformat(),
+    }
 
 
 if __name__ == "__main__":

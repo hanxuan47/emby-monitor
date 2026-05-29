@@ -143,12 +143,48 @@ def resolve_token_str(
     """Resolve token string from Authorization header (preferred) or query param.
     
     Priority:
-    1. Authorization: Bearer xxx header
+    1. Authorization: Bearer *** header
     2. token=xxx query parameter (legacy)
     """
     if authorization.startswith("Bearer "):
         return authorization[7:]
     return token
+
+
+# ── Auth dependencies (FastAPI Depends) ─────────────────────────────
+
+async def require_auth(
+    token: str = Depends(resolve_token_str),
+    db: AsyncSession = Depends(get_session),
+) -> PanelUser:
+    """Dependency: require valid auth token. Returns the authenticated PanelUser.
+    
+    Raises HTTPException(401) if token is missing/invalid/expired.
+    Raises HTTPException(403) if account is disabled.
+    """
+    if not token:
+        raise HTTPException(status_code=401, detail="请先登录")
+    decoded = decode_token(token)
+    if not decoded:
+        raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+    result = await db.execute(
+        select(PanelUser).where(PanelUser.id == decoded["user_id"])
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="用户不存在")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="账号已被禁用")
+    return user
+
+
+async def require_admin(
+    user: PanelUser = Depends(require_auth),
+) -> PanelUser:
+    """Dependency: require admin role. Chains from require_auth."""
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="无权操作，仅管理员可用")
+    return user
 
 
 async def hash_password(pw: str) -> str:
@@ -678,9 +714,12 @@ async def create_site(
     tags: str = Query(""),
     api_key: str = Query(""),
     note: str = Query(""),
+    admin: PanelUser = Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
-    """Add a new site route."""
+    """Add a new site route (admin only)."""
+    # SSRF guard: validate URL scheme
+    _validate_site_url(url)
     encrypted_key = crypto_encrypt(api_key) if api_key else ""
     site = SiteRoute(name=name, url=url, route_type=route_type, tags=tags, api_key=encrypted_key, note=note)
     db.add(site)
@@ -690,8 +729,12 @@ async def create_site(
 
 
 @router.delete("/api/sites/{site_id}")
-async def delete_site(site_id: int, db: AsyncSession = Depends(get_session)):
-    """Delete a site route."""
+async def delete_site(
+    site_id: int,
+    admin: PanelUser = Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Delete a site route (admin only)."""
     result = await db.execute(select(SiteRoute).where(SiteRoute.id == site_id))
     site = result.scalar_one_or_none()
     if site:
@@ -700,13 +743,59 @@ async def delete_site(site_id: int, db: AsyncSession = Depends(get_session)):
     return {"ok": True}
 
 
+# ── SSRF Protection ─────────────────────────────────────────────────
+
+import ipaddress
+import re
+from urllib.parse import urlparse
+
+_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "metadata.google.internal"}
+_BLOCKED_NETS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+]
+
+
+def _validate_site_url(url: str) -> None:
+    """Validate that a site URL does not target internal/private addresses."""
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        raise HTTPException(status_code=400, detail="无效的 URL 格式")
+
+    hostname = (parsed.hostname or "").lower()
+
+    if hostname in _BLOCKED_HOSTS:
+        raise HTTPException(status_code=400, detail="不允许使用内部地址")
+
+    try:
+        addr = ipaddress.ip_address(hostname)
+        for net in _BLOCKED_NETS:
+            if addr in net:
+                raise HTTPException(status_code=400, detail="不允许访问内网地址")
+    except ValueError:
+        pass  # Not an IP address, DNS will resolve later
+
+
 @router.post("/api/sites/test/{site_id}")
-async def test_site(site_id: int, db: AsyncSession = Depends(get_session)):
-    """Test latency to a site route."""
+async def test_site(
+    site_id: int,
+    admin: PanelUser = Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Test latency to a site route (admin only)."""
     result = await db.execute(select(SiteRoute).where(SiteRoute.id == site_id))
     site = result.scalar_one_or_none()
     if not site:
         return {"error": "Site not found"}
+
+    # SSRF guard
+    _validate_site_url(site.url)
 
     import httpx
     latency = -1
@@ -729,14 +818,25 @@ async def test_site(site_id: int, db: AsyncSession = Depends(get_session)):
 
 
 @router.post("/api/sites/test-all")
-async def test_all_sites(db: AsyncSession = Depends(get_session)):
-    """Test latency to all active sites."""
+async def test_all_sites(
+    admin: PanelUser = Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Test latency to all active sites (admin only)."""
     result = await db.execute(select(SiteRoute).where(SiteRoute.is_active == 1))
     sites = result.scalars().all()
 
     import httpx
 
     async def test_one(site: SiteRoute):
+        # SSRF guard per site
+        try:
+            _validate_site_url(site.url)
+        except HTTPException:
+            site.status = "blocked"
+            site.latency_ms = -1
+            site.last_check = datetime.utcnow()
+            return
         try:
             start = datetime.utcnow()
             async with httpx.AsyncClient(timeout=8) as cl:
@@ -1353,8 +1453,11 @@ async def checkin_status(
 
 
 @router.get("/api/notify/config")
-async def get_notify_config(db: AsyncSession = Depends(get_session)):
-    """Get notification configuration."""
+async def get_notify_config(
+    admin: PanelUser = Depends(require_admin),
+    db: AsyncSession = Depends(get_session),
+):
+    """Get notification configuration (admin only)."""
     result = await db.execute(
         select(PanelConfig).where(
             PanelConfig.key.in_([
@@ -1393,9 +1496,10 @@ async def save_notify_config(
     smtp_from: str = Query(""),
     tg_bot_token: str = Query(""),
     tg_chat_id: str = Query(""),
+    admin: PanelUser = Depends(require_admin),
     db: AsyncSession = Depends(get_session),
 ):
-    """Save notification configuration."""
+    """Save notification configuration (admin only)."""
     pairs = {
         "smtp_host": smtp_host,
         "smtp_port": smtp_port,

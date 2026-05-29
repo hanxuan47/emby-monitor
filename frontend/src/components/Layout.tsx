@@ -46,7 +46,7 @@ const adminExtra: NavItem[] = [
   { id: 'wiki-admin', label: 'Wiki 管理', icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253' },
 ]
 
-export function Sidebar({ currentPage, onNavigate }: { currentPage: string; onNavigate: (id: string) => void }) {
+export function Sidebar({ currentPage, onNavigate, mobileOpen = false, onClose }: { currentPage: string; onNavigate: (id: string) => void; mobileOpen?: boolean; onClose?: () => void }) {
   const nav = useNavigate()
   const user = getUser()
   const admin = isAdmin()
@@ -57,13 +57,35 @@ export function Sidebar({ currentPage, onNavigate }: { currentPage: string; onNa
     nav('/')
   }
 
+  function handleNav(id: string) {
+    onNavigate(id)
+    onClose?.()
+  }
+
   return (
-    <aside className="w-[230px] bg-[rgba(13,15,22,0.92)] backdrop-blur-[40px] border-r border-[rgba(255,255,255,0.07)] flex flex-col h-screen sticky top-0 z-50 overflow-y-auto">
+    <>
+      {/* ── Mobile overlay ── */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/60 z-40 backdrop-blur-sm transition-opacity"
+          onClick={onClose}
+        />
+      )}
+
+      <aside className={`
+        w-[230px] bg-[rgba(13,15,22,0.92)] backdrop-blur-[40px] border-r border-[rgba(255,255,255,0.07)] flex flex-col h-screen sticky top-0 z-50 overflow-y-auto
+        max-md:fixed max-md:left-0 max-md:top-0 max-md:h-full max-md:z-50 max-md:transition-transform max-md:duration-300 max-md:ease-out
+        ${mobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}
+      `}>
       <div className="flex items-center gap-2.5 px-4 py-4 mb-1">
         <svg className="w-7 h-7 shrink-0" viewBox="0 0 24 24" fill="none">
           <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="url(#lg)" strokeWidth="1.8" />
         </svg>
         <span className="font-bold text-sm tracking-tight">Emby <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Monitor</span></span>
+        {/* ── Close button (mobile only) ── */}
+        <button onClick={onClose} className="md:hidden ml-auto p-1.5 rounded-lg hover:bg-[rgba(255,255,255,0.06)] text-white/30">
+          <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 18L18 6M6 6l12 12" strokeLinecap="round"/></svg>
+        </button>
       </div>
 
       <div className="flex-1 space-y-0.5 overflow-y-auto px-1">
@@ -74,7 +96,7 @@ export function Sidebar({ currentPage, onNavigate }: { currentPage: string; onNa
               {isSection && i > 0 && <div className="sidebar-label px-3 pt-4 pb-1 text-[.65rem] text-[rgba(255,255,255,0.3)] font-semibold uppercase tracking-wider">{admin && i >= userNav.length ? '管理' : '概览'}</div>}
               <div
                 className={`sidebar-link ${currentPage === item.id ? 'active' : ''}`}
-                onClick={() => onNavigate(item.id)}
+                onClick={() => handleNav(item.id)}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4 shrink-0 opacity-70">
                   <path d={item.icon} strokeLinecap="round" />
@@ -88,7 +110,7 @@ export function Sidebar({ currentPage, onNavigate }: { currentPage: string; onNa
 
       <div className="border-t border-[rgba(255,255,255,0.07)] mx-3 my-2" />
       <div className="px-3 space-y-0.5 pb-2">
-        <div className="sidebar-link" onClick={() => onNavigate('settings')}>
+        <div className="sidebar-link" onClick={() => handleNav('settings')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /></svg>
           <span>设置</span>
         </div>
@@ -109,43 +131,103 @@ export function Sidebar({ currentPage, onNavigate }: { currentPage: string; onNa
         </defs>
       </svg>
     </aside>
+    </>
   )
 }
 
 export function TabBar({ currentPage, onNavigate }: { currentPage: string; onNavigate: (id: string) => void }) {
   const user = getUser()
   const admin = isAdmin()
+  const barRef = useRef<HTMLDivElement>(null)
+  const [mounted, setMounted] = useState(false)
 
   const tabs = admin
     ? [
         { id: 'dashboard', label: '首页', icon: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zm0 11h7v7h-7v-7zM3 14h7v7H3v-7z' },
-        { id: 'streams', label: '流', icon: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z' },
+        { id: 'streams', label: '实时流', icon: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z' },
         { id: 'checkin', label: '签到', icon: 'M9 12l2 2 4-4' },
         { id: 'users-mgmt', label: '用户', icon: 'M18 9v3m0 0v3m0-3h3m-3 0h-3' },
         { id: 'tickets', label: '工单', icon: 'M15 5v2m0 4v2m0 4v2' },
       ]
     : [
         { id: 'dashboard', label: '首页', icon: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zm0 11h7v7h-7v-7zM3 14h7v7H3v-7z' },
-        { id: 'streams', label: '流', icon: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z' },
+        { id: 'streams', label: '实时流', icon: 'M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z' },
         { id: 'checkin', label: '签到', icon: 'M9 12l2 2 4-4' },
         { id: 'tickets', label: '工单', icon: 'M15 5v2m0 4v2m0 4v2' },
         { id: 'settings', label: '设置', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0' },
       ]
 
+  const activeIndex = tabs.findIndex(t => t.id === currentPage)
+
+  // Entrance animation trigger
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 50)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Compute pill position based on active index
+  const tabWidth = 100 / tabs.length
+  const pillStyle = {
+    width: `${tabWidth * 0.55}%`,
+    left: `${tabWidth * activeIndex + tabWidth * 0.225}%`,
+  }
+
   return (
-    <div className="hidden max-md:flex fixed bottom-0 left-0 right-0 z-100 bg-[rgba(13,15,22,0.92)] backdrop-blur-[40px] border-t border-[rgba(255,255,255,0.07)] px-0 pt-1 pb-[calc(.3rem+var(--safe-bottom))] justify-around">
+    <div
+      ref={barRef}
+      className="hidden max-md:flex fixed bottom-0 left-0 right-0 z-[100] bg-[rgba(13,15,22,0.88)] backdrop-blur-[40px] border-t border-[rgba(255,255,255,0.06)] px-1 pt-1 pb-[calc(.35rem+var(--safe-bottom))] items-end"
+      style={{
+        transform: mounted ? 'translateY(0)' : 'translateY(100%)',
+        opacity: mounted ? 1 : 0,
+        transition: 'transform 0.45s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.35s ease',
+      }}
+    >
+      {/* ── Pill indicator ── */}
+      <div
+        className="absolute top-1.5 h-7 rounded-xl bg-[rgba(59,130,246,0.15)] border border-[rgba(59,130,246,0.2)] shadow-[0_0_12px_rgba(59,130,246,0.1)]"
+        style={{
+          ...pillStyle,
+          transition: 'left 0.35s cubic-bezier(0.32, 0.72, 0, 1), width 0.35s cubic-bezier(0.32, 0.72, 0, 1)',
+        }}
+      />
+
+      {/* ── Tab buttons ── */}
       {tabs.map(t => (
         <button
           key={t.id}
-          className={`flex flex-col items-center gap-[1px] px-1 py-1 cursor-pointer transition-colors border-none bg-transparent min-w-0 flex-1 ${currentPage === t.id ? 'text-[#3b82f6]' : 'text-[rgba(255,255,255,0.3)]'}`}
+          className="relative flex flex-col items-center gap-1 px-1 py-1.5 cursor-pointer border-none bg-transparent min-w-0 flex-1 transition-all duration-200 active:scale-[0.88] select-none"
+          style={{ color: currentPage === t.id ? '#60a5fa' : 'rgba(255,255,255,0.32)', WebkitTapHighlightColor: 'transparent' }}
           onClick={() => onNavigate(t.id)}
         >
-          <svg className="w-[22px] h-[22px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-            <path d={t.icon} strokeLinecap="round" />
+          {/* Icon with spring scale on active */}
+          <svg
+            className="w-[22px] h-[22px] transition-transform duration-300"
+            style={{ transform: currentPage === t.id ? 'scale(1.08)' : 'scale(1)' }}
+            viewBox="0 0 24 24"
+            fill={currentPage === t.id ? 'url(#tabGradient)' : 'none'}
+            stroke="currentColor"
+            strokeWidth={currentPage === t.id ? 0 : 1.8}
+          >
+            <path d={t.icon} strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span className="text-[.6rem] font-medium">{t.label}</span>
+          <span
+            className="text-[.6rem] font-semibold transition-all duration-200"
+            style={{ opacity: currentPage === t.id ? 1 : 0.6 }}
+          >
+            {t.label}
+          </span>
         </button>
       ))}
+
+      {/* Pill gradient definition */}
+      <svg style={{ position: 'absolute', width: 0, height: 0 }}>
+        <defs>
+          <linearGradient id="tabGradient" x1="4" y1="4" x2="20" y2="20">
+            <stop stopColor="#60a5fa" />
+            <stop offset="1" stopColor="#818cf8" />
+          </linearGradient>
+        </defs>
+      </svg>
     </div>
   )
 }

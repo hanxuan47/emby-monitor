@@ -105,8 +105,8 @@ export default function CardManage() {
           <div className="text-center py-10 text-[rgba(255,255,255,0.3)] text-sm">暂无卡密</div>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+            <div className="overflow-x-auto -mx-3 px-3">
+              <table className="w-full text-xs min-w-[600px]">
                 <thead>
                   <tr className="text-[rgba(255,255,255,0.3)] border-b border-[rgba(255,255,255,0.05)]">
                     <th className="text-left py-2 pr-2">卡密</th>
