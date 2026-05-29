@@ -61,6 +61,7 @@ services:
     working_dir: /app
     command: >
       sh -c "
+        set -e;
         mkdir -p /app/data;
         if [ ! -f /app/backend/main.py ]; then
           echo '>>> 首次运行，正在克隆项目...';
@@ -76,6 +77,7 @@ services:
         if [ ! -d /app/frontend/dist ]; then
           echo '>>> 构建前端（首次需要几分钟）...';
           if ! command -v node >/dev/null 2>&1; then
+            apt-get update -qq && apt-get install -y -qq ca-certificates curl &&
             curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&
             apt-get install -y -qq nodejs;
           fi;
@@ -83,7 +85,7 @@ services:
           echo '>>> 前端构建完成';
         fi;
         echo '>>> 启动服务...';
-        uvicorn backend.main:app --host 0.0.0.0 --port 8000
+        exec uvicorn backend.main:app --host 0.0.0.0 --port 8000
       "
     restart: unless-stopped
     environment:
