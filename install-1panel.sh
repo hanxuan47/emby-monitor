@@ -64,7 +64,7 @@ services:
         mkdir -p /app/data;
         if [ ! -f /app/backend/main.py ]; then
           echo '>>> 首次运行，正在克隆项目...';
-          apt-get update -qq && apt-get install -y -qq git &&
+          apt-get update -qq && apt-get install -y -qq git ca-certificates curl &&
           git clone --depth 1 https://github.com/hanxuan47/emby-monitor.git /tmp/repo &&
           cp -r /tmp/repo/* /app/ &&
           cp -r /tmp/repo/.[!.]* /app/ 2>/dev/null || true &&
@@ -73,6 +73,15 @@ services:
         fi;
         echo '>>> 安装 Python 依赖...';
         pip install -r backend/requirements.txt -q --no-cache-dir;
+        if [ ! -d /app/frontend/dist ]; then
+          echo '>>> 构建前端（首次需要几分钟）...';
+          if ! command -v node >/dev/null 2>&1; then
+            curl -fsSL https://deb.nodesource.com/setup_20.x | bash - &&
+            apt-get install -y -qq nodejs;
+          fi;
+          cd /app/frontend && npm ci && npm run build && cd /app;
+          echo '>>> 前端构建完成';
+        fi;
         echo '>>> 启动服务...';
         uvicorn backend.main:app --host 0.0.0.0 --port 8000
       "
