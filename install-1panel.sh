@@ -61,6 +61,7 @@ services:
     working_dir: /app
     command: >
       sh -c "
+        mkdir -p /app/data;
         if [ ! -f /app/backend/main.py ]; then
           echo '>>> 首次运行，正在克隆项目...';
           apt-get update -qq && apt-get install -y -qq git &&

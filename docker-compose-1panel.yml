@@ -22,6 +22,7 @@ services:
     # 启动时自动克隆代码（如果还没克隆）+ 安装依赖 + 启动
     command: >
       sh -c "
+        mkdir -p /app/data;
         if [ ! -f /app/backend/main.py ]; then
           echo '>>> 首次运行，正在克隆项目...';
           apt-get update -qq && apt-get install -y -qq git && 
